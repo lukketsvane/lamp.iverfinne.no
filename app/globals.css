@@ -8,14 +8,10 @@ html,
 body {
   height: 100%;
   width: 100%;
-  background: #ffffff;
+  background: #f0efe9;
   color: #1a1a1a;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-}
-
-#__next {
-  height: 100%;
 }
