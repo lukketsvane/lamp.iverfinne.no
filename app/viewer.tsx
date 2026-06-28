@@ -18,6 +18,7 @@ const MODELS: Model[] = [
   { name: "Desk Lamp", url: "/models/desk_lamp_scene.glb" },
   { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
   { name: "Lamp 02", url: "/models/lamp_02.glb" },
+  { name: "Lamp 03", url: "/models/lamp_03.glb" },
   { name: "micro:bit", url: "/models/microbit_2.glb" },
 ];
 
