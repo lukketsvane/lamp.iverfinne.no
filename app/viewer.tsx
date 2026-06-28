@@ -290,6 +290,29 @@ const Icon = {
       />
     </svg>
   ),
+  Theme: ({ dark }: { dark: boolean }) =>
+    dark ? (
+      // Sun (click to go light)
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
+        <path
+          d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </svg>
+    ) : (
+      // Moon (click to go dark)
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
   Chevron: ({ dir }: { dir: "up" | "down" }) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
       <path
@@ -314,13 +337,9 @@ export default function Viewer() {
     setIndex((i) => Math.min(MODELS.length - 1, Math.max(0, i + dir)));
   }, []);
 
-  // Follow system dark mode.
+  // Initialise from system preference; the toggle takes over after that.
   useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => setDark(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    setDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
   }, []);
 
   // Keyboard: up/left = prev, down/right = next.
@@ -370,6 +389,13 @@ export default function Viewer() {
 
       {/* Top-right: icons stacked above the counter */}
       <div style={corner}>
+        <button
+          aria-label="Lyst/mørkt tema"
+          onClick={() => setDark((v) => !v)}
+          style={{ ...iconBtn, color: fg }}
+        >
+          <Icon.Theme dark={dark} />
+        </button>
         <button
           aria-label="Slå lampa av/på"
           onClick={() => !bulbDisabled && setBulbOn((v) => !v)}
