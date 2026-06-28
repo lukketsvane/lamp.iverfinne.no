@@ -12,20 +12,21 @@ import {
 } from "@react-three/drei";
 import * as THREE from "three";
 
-type Model = { name: string; url: string };
+type Model = { name: string; url: string; scale?: number };
 
 const MODELS: Model[] = [
   { name: "Desk Lamp", url: "/models/desk_lamp_scene.glb" },
   { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
   { name: "Lamp 02", url: "/models/lamp_02.glb" },
   { name: "Lamp 03", url: "/models/lamp_03.glb" },
-  { name: "micro:bit", url: "/models/microbit_2.glb" },
+  // Real micro:bit is only ~45x55 mm — render it small relative to the lamps.
+  { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32 },
 ];
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
 
 /** Loads a GLB and normalizes it: centered at origin, scaled to a fixed size. */
-function NormalizedModel({ url }: { url: string }) {
+function NormalizedModel({ url, scale = 1 }: { url: string; scale?: number }) {
   const { scene } = useGLTF(url);
   const object = useMemo(() => {
     const clone = scene.clone(true);
@@ -38,9 +39,9 @@ function NormalizedModel({ url }: { url: string }) {
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     const wrap = new THREE.Group();
     wrap.add(clone);
-    wrap.scale.setScalar(2.4 / maxDim);
+    wrap.scale.setScalar((2.4 * scale) / maxDim);
     return wrap;
-  }, [scene]);
+  }, [scene, scale]);
   return <primitive object={object} />;
 }
 
@@ -96,7 +97,7 @@ function Scene({ onIndex }: { onIndex: (i: number) => void }) {
             groups.current[i] = el;
           }}
         >
-          <NormalizedModel url={m.url} />
+          <NormalizedModel url={m.url} scale={m.scale} />
         </group>
       ))}
 
