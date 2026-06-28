@@ -15,6 +15,7 @@ type Model = {
 };
 
 const MODELS: Model[] = [
+  { name: "Desk Lamp", url: "/models/desk_lamp_scene.glb" },
   { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
   { name: "Lamp 02", url: "/models/lamp_02.glb" },
   { name: "micro:bit", url: "/models/microbit_2.glb" },
@@ -66,10 +67,8 @@ export default function Viewer() {
         <OrbitControls
           makeDefault
           enablePan={false}
-          minDistance={2}
-          maxDistance={12}
-          autoRotate
-          autoRotateSpeed={0.6}
+          enableZoom={false}
+          enableRotate
         />
       </Canvas>
 
