@@ -17,6 +17,10 @@ type Model = {
   url: string;
   scale?: number;
   camera?: [number, number, number];
+  /** Explicit lens material-name substrings (overrides auto-detection). */
+  lens?: string[];
+  /** Set when the model has no light fixture (bulb toggle does nothing). */
+  noBulb?: boolean;
 };
 
 const DEFAULT_CAM: [number, number, number] = [0, 0, 6];
@@ -28,12 +32,14 @@ const MODELS: Model[] = [
     url: "/models/desk_lamp_scene.glb",
     scale: 0.9,
     camera: [1.5, 3.2, 6],
+    noBulb: true, // a whole desk scene — no single light fixture
   },
   { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
-  { name: "Lamp 02", url: "/models/lamp_02.glb" },
+  // The oval frosted face is the lens (confirmed via part segmentation).
+  { name: "Lamp 02", url: "/models/lamp_02.glb", lens: ["tripo_part_4_material"] },
   { name: "Lamp 03", url: "/models/lamp_03.glb", scale: 0.8 },
-  // Real micro:bit is only ~45x55 mm — render it small relative to the lamps.
-  { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32 },
+  // Real micro:bit is only ~45x55 mm; it's not a lamp, so no bulb.
+  { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32, noBulb: true },
 ];
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
@@ -41,31 +47,56 @@ MODELS.forEach((m) => useGLTF.preload(m.url));
 const WARM = new THREE.Color("#ffcf8a");
 const EXPLODE_SPREAD = 1.6;
 
-/** Heuristic: does this material look like a light-emitting lens/diffuser? */
-function isLensMaterial(mat: THREE.MeshStandardMaterial) {
-  const name = (mat.name || "").toLowerCase();
-  if (/lens|glass|diffus|shade|panel|screen|light|lamp|emit|bulb|glow/.test(name))
-    return true;
-  // Otherwise treat near-white materials as the diffuser.
-  const c = mat.color;
-  const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-  return lum > 0.82;
+/**
+ * Find the lens/diffuser meshes geometrically: a thin, front-facing panel
+ * (smallest dimension along X or Z), with a large face, sitting in the upper
+ * part of the model (so it isn't the base or a horizontal shelf).
+ */
+function detectLensMeshes(
+  clone: THREE.Object3D,
+  box: THREE.Box3,
+  size: THREE.Vector3
+): Set<THREE.Mesh> {
+  const M = Math.max(size.x, size.y, size.z) || 1;
+  const found = new Set<THREE.Mesh>();
+  clone.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const b = new THREE.Box3().setFromObject(mesh);
+    const s = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    b.getSize(s);
+    b.getCenter(c);
+    const dims = [s.x, s.y, s.z];
+    const minDim = Math.min(...dims);
+    const minAxis = dims.indexOf(minDim);
+    const sorted = [...dims].sort((a, b) => a - b);
+    const faceRel = (sorted[1] * sorted[2]) / (M * M);
+    const thin = minDim / M < 0.09;
+    const frontFacing = minAxis !== 1; // thin along X or Z, not Y
+    const elevated = c.y > box.min.y + 0.22 * size.y;
+    if (thin && frontFacing && elevated && faceRel >= 0.15 && faceRel <= 0.6)
+      found.add(mesh);
+  });
+  return found;
 }
 
 /**
  * The active model: normalized (centered + scaled), with animated
- * exploded-view and bulb (emissive + interior light) states.
+ * exploded-view and bulb (emissive lens + interior light) states.
  */
 function ActiveModel({
   url,
   scale = 1,
   exploded,
   bulbOn,
+  lensNames,
 }: {
   url: string;
   scale?: number;
   exploded: boolean;
   bulbOn: boolean;
+  lensNames?: string[];
 }) {
   const { scene } = useGLTF(url);
   const lightRef = useRef<THREE.PointLight>(null);
@@ -74,8 +105,23 @@ function ActiveModel({
 
   const { root, parts, lensMats } = useMemo(() => {
     const clone = scene.clone(true);
+    clone.updateMatrixWorld(true);
 
-    // Clone materials so emissive tweaks don't leak into the cached GLTF.
+    const box = new THREE.Box3().setFromObject(clone);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+
+    // Decide which meshes are the lens.
+    const lensMeshes = lensNames?.length
+      ? new Set<THREE.Mesh>()
+      : detectLensMeshes(clone, box, size);
+    const matchName = (n: string) =>
+      !!lensNames?.some((s) => n.toLowerCase().includes(s.toLowerCase()));
+
+    // Clone materials so emissive tweaks don't leak into the cached GLTF,
+    // and mark the lens materials emissive.
     const lensMats: THREE.MeshStandardMaterial[] = [];
     clone.traverse((o) => {
       const mesh = o as THREE.Mesh;
@@ -84,7 +130,9 @@ function ActiveModel({
       const mats = (arr ? mesh.material : [mesh.material]) as THREE.Material[];
       const cloned = mats.filter(Boolean).map((m) => {
         const c = m.clone() as THREE.MeshStandardMaterial;
-        if (c.isMeshStandardMaterial && isLensMaterial(c)) {
+        const isLens =
+          lensMeshes.has(mesh) || matchName(c.name) || matchName(mesh.name);
+        if (c.isMeshStandardMaterial && isLens) {
           c.emissive = WARM.clone();
           c.emissiveIntensity = 0;
           lensMats.push(c);
@@ -94,12 +142,7 @@ function ActiveModel({
       mesh.material = arr ? cloned : cloned[0];
     });
 
-    // Center + scale to a consistent on-screen size.
-    const box = new THREE.Box3().setFromObject(clone);
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
+    // Center the model at the origin.
     clone.position.sub(center);
 
     // Record explode directions for each top-level part.
@@ -119,7 +162,7 @@ function ActiveModel({
     wrap.add(clone);
     wrap.scale.setScalar((2.4 * scale) / maxDim);
     return { root: wrap, parts, lensMats };
-  }, [scene, scale]);
+  }, [scene, scale, lensNames]);
 
   useFrame((_, dt) => {
     const k = Math.min(1, dt * 5);
@@ -195,7 +238,8 @@ function Scene({
           url={model.url}
           scale={model.scale}
           exploded={exploded}
-          bulbOn={bulbOn}
+          bulbOn={bulbOn && !model.noBulb}
+          lensNames={model.lens}
         />
       </Suspense>
 
@@ -301,6 +345,7 @@ export default function Viewer() {
   const muted = dark ? "#6b6b70" : "#b9b6ac";
   const bg = dark ? "#0a0a0b" : "#f0efe9";
   const pad = (n: number) => String(n).padStart(2, "0");
+  const bulbDisabled = !!MODELS[index].noBulb;
 
   return (
     <main
@@ -323,20 +368,24 @@ export default function Viewer() {
         <Scene index={index} exploded={exploded} bulbOn={bulbOn} dark={dark} />
       </Canvas>
 
-      {/* Top bar */}
-      <div style={topBar}>
+      {/* Top-right: icons stacked above the counter */}
+      <div style={corner}>
         <button
           aria-label="Slå lampa av/på"
-          onClick={() => setBulbOn((v) => !v)}
+          onClick={() => !bulbDisabled && setBulbOn((v) => !v)}
+          disabled={bulbDisabled}
           style={{
             ...iconBtn,
             color: fg,
-            filter: bulbOn
-              ? "drop-shadow(0 0 10px rgba(255,200,120,0.9))"
-              : "none",
+            opacity: bulbDisabled ? 0.25 : 1,
+            cursor: bulbDisabled ? "default" : "pointer",
+            filter:
+              bulbOn && !bulbDisabled
+                ? "drop-shadow(0 0 10px rgba(255,200,120,0.9))"
+                : "none",
           }}
         >
-          <Icon.Bulb on={bulbOn} />
+          <Icon.Bulb on={bulbOn && !bulbDisabled} />
         </button>
         <button
           aria-label="Exploded view"
@@ -345,17 +394,13 @@ export default function Viewer() {
         >
           <Icon.Layers on={exploded} />
         </button>
-      </div>
-
-      {/* Title + counter */}
-      <div style={titleRow}>
-        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
-          lamp
-        </span>
-        <span style={{ fontSize: 20, fontWeight: 600 }}>
+        <span style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>
           {pad(index + 1)} <span style={{ color: muted }}>/ {pad(MODELS.length)}</span>
         </span>
       </div>
+
+      {/* Large wordmark */}
+      <span style={wordmark}>lamp</span>
 
       {/* Right-side pager */}
       <div style={pager}>
@@ -397,24 +442,23 @@ export default function Viewer() {
 }
 
 /* ---------- styles ---------- */
-const topBar: React.CSSProperties = {
+const corner: React.CSSProperties = {
   position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
+  top: "1.5rem",
+  right: "1.5rem",
   display: "flex",
-  justifyContent: "space-between",
-  padding: "1.5rem",
+  flexDirection: "column",
+  alignItems: "flex-end",
+  gap: 14,
 };
-const titleRow: React.CSSProperties = {
+const wordmark: React.CSSProperties = {
   position: "absolute",
-  top: "4.2rem",
-  left: 0,
-  right: 0,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-  padding: "0 1.5rem",
+  top: "3.5rem",
+  left: "1.5rem",
+  fontSize: "clamp(40px, 13vw, 72px)",
+  fontWeight: 700,
+  letterSpacing: "-0.03em",
+  lineHeight: 1,
 };
 const iconBtn: React.CSSProperties = {
   background: "none",
