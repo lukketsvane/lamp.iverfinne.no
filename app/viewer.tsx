@@ -9,13 +9,7 @@ import {
   useState,
 } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import {
-  OrbitControls,
-  useGLTF,
-  Environment,
-  ContactShadows,
-  Html,
-} from "@react-three/drei";
+import { OrbitControls, useGLTF, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 
 type Model = { name: string; url: string; scale?: number };
@@ -24,7 +18,7 @@ const MODELS: Model[] = [
   { name: "Desk Lamp", url: "/models/desk_lamp_scene.glb" },
   { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
   { name: "Lamp 02", url: "/models/lamp_02.glb" },
-  { name: "Lamp 03", url: "/models/lamp_03.glb" },
+  { name: "Lamp 03", url: "/models/lamp_03.glb", scale: 0.8 },
   // Real micro:bit is only ~45x55 mm — render it small relative to the lamps.
   { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32 },
 ];
@@ -72,10 +66,11 @@ function ActiveModel({
     const lensMats: THREE.MeshStandardMaterial[] = [];
     clone.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      const cloned = mats.map((m) => {
-        const c = (m as THREE.Material).clone() as THREE.MeshStandardMaterial;
+      if (!mesh.isMesh || !mesh.material) return;
+      const arr = Array.isArray(mesh.material);
+      const mats = (arr ? mesh.material : [mesh.material]) as THREE.Material[];
+      const cloned = mats.filter(Boolean).map((m) => {
+        const c = m.clone() as THREE.MeshStandardMaterial;
         if (c.isMeshStandardMaterial && isLensMaterial(c)) {
           c.emissive = WARM.clone();
           c.emissiveIntensity = 0;
@@ -83,7 +78,7 @@ function ActiveModel({
         }
         return c;
       });
-      mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0];
+      mesh.material = arr ? cloned : cloned[0];
     });
 
     // Center + scale to a consistent on-screen size.
@@ -142,14 +137,6 @@ function ActiveModel({
   );
 }
 
-function Loader() {
-  return (
-    <Html center>
-      <div style={{ color: "#aaa", fontSize: 14 }}>Lastar…</div>
-    </Html>
-  );
-}
-
 function Scene({
   index,
   exploded,
@@ -164,14 +151,15 @@ function Scene({
   const model = MODELS[index];
   return (
     <>
-      <ambientLight intensity={dark ? 0.12 : 0.6} />
-      <directionalLight
-        position={[4, 8, 6]}
-        intensity={dark ? 0.15 : 1.1}
+      <ambientLight intensity={dark ? 0.12 : 0.7} />
+      <hemisphereLight
+        intensity={dark ? 0.1 : 0.6}
+        groundColor={dark ? "#000000" : "#d8d4c8"}
       />
-      {!dark && <Environment preset="city" />}
+      <directionalLight position={[5, 8, 6]} intensity={dark ? 0.2 : 1.6} />
+      <directionalLight position={[-6, 4, -4]} intensity={dark ? 0.05 : 0.6} />
 
-      <Suspense fallback={<Loader />}>
+      <Suspense fallback={null}>
         <ActiveModel
           key={model.url}
           url={model.url}
