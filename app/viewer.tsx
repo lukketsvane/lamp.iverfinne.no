@@ -1,10 +1,16 @@
 "use client";
 
-import { Suspense, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
-  ScrollControls,
-  useScroll,
+  OrbitControls,
   useGLTF,
   Environment,
   ContactShadows,
@@ -25,24 +31,115 @@ const MODELS: Model[] = [
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
 
-/** Loads a GLB and normalizes it: centered at origin, scaled to a fixed size. */
-function NormalizedModel({ url, scale = 1 }: { url: string; scale?: number }) {
+const WARM = new THREE.Color("#ffcf8a");
+const EXPLODE_SPREAD = 1.6;
+
+/** Heuristic: does this material look like a light-emitting lens/diffuser? */
+function isLensMaterial(mat: THREE.MeshStandardMaterial) {
+  const name = (mat.name || "").toLowerCase();
+  if (/lens|glass|diffus|shade|panel|screen|light|lamp|emit|bulb|glow/.test(name))
+    return true;
+  // Otherwise treat near-white materials as the diffuser.
+  const c = mat.color;
+  const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  return lum > 0.82;
+}
+
+/**
+ * The active model: normalized (centered + scaled), with animated
+ * exploded-view and bulb (emissive + interior light) states.
+ */
+function ActiveModel({
+  url,
+  scale = 1,
+  exploded,
+  bulbOn,
+}: {
+  url: string;
+  scale?: number;
+  exploded: boolean;
+  bulbOn: boolean;
+}) {
   const { scene } = useGLTF(url);
-  const object = useMemo(() => {
+  const lightRef = useRef<THREE.PointLight>(null);
+  const factor = useRef(0);
+  const glow = useRef(0);
+
+  const { root, parts, lensMats } = useMemo(() => {
     const clone = scene.clone(true);
+
+    // Clone materials so emissive tweaks don't leak into the cached GLTF.
+    const lensMats: THREE.MeshStandardMaterial[] = [];
+    clone.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const cloned = mats.map((m) => {
+        const c = (m as THREE.Material).clone() as THREE.MeshStandardMaterial;
+        if (c.isMeshStandardMaterial && isLensMaterial(c)) {
+          c.emissive = WARM.clone();
+          c.emissiveIntensity = 0;
+          lensMats.push(c);
+        }
+        return c;
+      });
+      mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0];
+    });
+
+    // Center + scale to a consistent on-screen size.
     const box = new THREE.Box3().setFromObject(clone);
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
     box.getSize(size);
     box.getCenter(center);
     clone.position.sub(center);
+
+    // Record explode directions for each top-level part.
+    const modelCenter = new THREE.Vector3(0, 0, 0);
+    const parts = clone.children.map((child) => {
+      const b = new THREE.Box3().setFromObject(child);
+      const pc = new THREE.Vector3();
+      b.getCenter(pc);
+      const dir = pc.clone().sub(modelCenter);
+      if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
+      dir.normalize();
+      return { obj: child, orig: child.position.clone(), dir };
+    });
+
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     const wrap = new THREE.Group();
     wrap.add(clone);
     wrap.scale.setScalar((2.4 * scale) / maxDim);
-    return wrap;
+    return { root: wrap, parts, lensMats };
   }, [scene, scale]);
-  return <primitive object={object} />;
+
+  useFrame((_, dt) => {
+    const k = Math.min(1, dt * 5);
+    factor.current += ((exploded ? 1 : 0) - factor.current) * k;
+    glow.current += ((bulbOn ? 1 : 0) - glow.current) * k;
+
+    for (const p of parts) {
+      p.obj.position
+        .copy(p.orig)
+        .addScaledVector(p.dir, factor.current * EXPLODE_SPREAD);
+    }
+    for (const m of lensMats) m.emissiveIntensity = glow.current * 2.4;
+    if (lightRef.current) lightRef.current.intensity = glow.current * 7;
+  });
+
+  return (
+    <group>
+      <primitive object={root} />
+      <pointLight
+        ref={lightRef}
+        position={[0, 0.4, 0]}
+        color={WARM}
+        distance={9}
+        decay={2}
+        intensity={0}
+      />
+    </group>
+  );
 }
 
 function Loader() {
@@ -53,138 +150,284 @@ function Loader() {
   );
 }
 
-/**
- * Scroll-driven vertical sequence: the active model is pinned at center and
- * spins as you scroll its section; crossing a section boundary swaps the model.
- */
-function Scene({ onIndex }: { onIndex: (i: number) => void }) {
-  const scroll = useScroll();
-  const groups = useRef<(THREE.Group | null)[]>([]);
-  const last = useRef(-1);
-
-  useFrame(() => {
-    const seg = scroll.offset * MODELS.length;
-    const index = Math.min(MODELS.length - 1, Math.floor(seg));
-    const local = seg - index; // 0..1 within the current section
-
-    if (index !== last.current) {
-      last.current = index;
-      onIndex(index);
-    }
-
-    MODELS.forEach((_, i) => {
-      const g = groups.current[i];
-      if (!g) return;
-      const active = i === index;
-      g.visible = active;
-      if (active) {
-        g.rotation.y = local * Math.PI * 2; // one full turn per section
-        g.position.y = Math.sin(local * Math.PI) * 0.12; // subtle vertical float
-      }
-    });
-  });
-
+function Scene({
+  index,
+  exploded,
+  bulbOn,
+  dark,
+}: {
+  index: number;
+  exploded: boolean;
+  bulbOn: boolean;
+  dark: boolean;
+}) {
+  const model = MODELS[index];
   return (
     <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[4, 8, 6]} intensity={1.1} castShadow />
-      <Environment preset="city" />
+      <ambientLight intensity={dark ? 0.12 : 0.6} />
+      <directionalLight
+        position={[4, 8, 6]}
+        intensity={dark ? 0.15 : 1.1}
+      />
+      {!dark && <Environment preset="city" />}
 
-      {MODELS.map((m, i) => (
-        <group
-          key={m.url}
-          ref={(el) => {
-            groups.current[i] = el;
-          }}
-        >
-          <NormalizedModel url={m.url} scale={m.scale} />
-        </group>
-      ))}
+      <Suspense fallback={<Loader />}>
+        <ActiveModel
+          key={model.url}
+          url={model.url}
+          scale={model.scale}
+          exploded={exploded}
+          bulbOn={bulbOn}
+        />
+      </Suspense>
 
       <ContactShadows
         position={[0, -1.35, 0]}
-        opacity={0.35}
+        opacity={dark ? 0.12 : 0.35}
         scale={10}
         blur={2.6}
         far={4}
+      />
+      <OrbitControls
+        makeDefault
+        enableZoom={false}
+        enablePan={false}
+        enableDamping
+        rotateSpeed={0.85}
+        target={[0, 0, 0]}
       />
     </>
   );
 }
 
+/* ---------- Icons ---------- */
+const Icon = {
+  Bulb: ({ on }: { on: boolean }) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.5.4.9 1 1 1.6l.1.5h4.8l.1-.5c.1-.6.5-1.2 1-1.6A6 6 0 0 0 12 3Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill={on ? WARM.getStyle() : "none"}
+      />
+    </svg>
+  ),
+  Layers: ({ on }: { on: boolean }) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5M3 17.5 12 22l9-4.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill={on ? "currentColor" : "none"}
+        opacity={on ? 0.85 : 1}
+      />
+    </svg>
+  ),
+  Chevron: ({ dir }: { dir: "up" | "down" }) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path
+        d={dir === "up" ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"}
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+};
+
 export default function Viewer() {
   const [index, setIndex] = useState(0);
-  const progressRef = useRef<HTMLDivElement>(null);
+  const [bulbOn, setBulbOn] = useState(false);
+  const [exploded, setExploded] = useState(false);
+  const [dark, setDark] = useState(false);
+  const wheelLock = useRef(false);
 
+  const go = useCallback((dir: number) => {
+    setIndex((i) => Math.min(MODELS.length - 1, Math.max(0, i + dir)));
+  }, []);
+
+  // Follow system dark mode.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => setDark(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Keyboard: up/left = prev, down/right = next.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") go(1);
+      else if (e.key === "ArrowUp" || e.key === "ArrowLeft") go(-1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go]);
+
+  // Vertical scroll switches models (one step per gesture).
+  const onWheel = (e: React.WheelEvent) => {
+    if (wheelLock.current || Math.abs(e.deltaY) < 8) return;
+    wheelLock.current = true;
+    go(e.deltaY > 0 ? 1 : -1);
+    window.setTimeout(() => (wheelLock.current = false), 650);
+  };
+
+  const fg = dark ? "#f4f4f5" : "#1a1a1a";
+  const muted = dark ? "#6b6b70" : "#b9b6ac";
+  const bg = dark ? "#0a0a0b" : "#f0efe9";
   const pad = (n: number) => String(n).padStart(2, "0");
 
   return (
-    <main style={{ height: "100dvh", width: "100vw", position: "relative" }}>
+    <main
+      onWheel={onWheel}
+      style={{
+        height: "100dvh",
+        width: "100vw",
+        position: "relative",
+        background: bg,
+        color: fg,
+        transition: "background 0.5s ease, color 0.5s ease",
+      }}
+    >
       <Canvas
         dpr={[1, 2]}
         camera={{ position: [0, 0, 6], fov: 40 }}
         gl={{ preserveDrawingBuffer: true, antialias: true }}
       >
-        <color attach="background" args={["#f0efe9"]} />
-        <Suspense fallback={<Loader />}>
-          <ScrollControls pages={MODELS.length} damping={0.25}>
-            <Scene onIndex={setIndex} />
-          </ScrollControls>
-        </Suspense>
+        <color attach="background" args={[bg]} />
+        <Scene index={index} exploded={exploded} bulbOn={bulbOn} dark={dark} />
       </Canvas>
 
-      {/* Fixed overlay (does not capture scroll) */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          padding: "1.75rem",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-        }}
-      >
-        <span style={{ fontWeight: 600, letterSpacing: "-0.02em", fontSize: 18 }}>
-          lamp
-        </span>
-
-        <div
+      {/* Top bar */}
+      <div style={topBar}>
+        <button
+          aria-label="Slå lampa av/på"
+          onClick={() => setBulbOn((v) => !v)}
           style={{
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "space-between",
+            ...iconBtn,
+            color: fg,
+            filter: bulbOn
+              ? "drop-shadow(0 0 10px rgba(255,200,120,0.9))"
+              : "none",
           }}
         >
-          <span style={{ fontSize: 26, fontWeight: 600, color: "#1a1a1a" }}>
-            {pad(index + 1)}{" "}
-            <span style={{ color: "#b9b6ac", fontWeight: 500 }}>
-              / {pad(MODELS.length)}
-            </span>
-          </span>
-          <span style={{ fontSize: 13, color: "#9b988e" }}>
-            {MODELS[index].name}
-          </span>
-        </div>
+          <Icon.Bulb on={bulbOn} />
+        </button>
+        <button
+          aria-label="Exploded view"
+          onClick={() => setExploded((v) => !v)}
+          style={{ ...iconBtn, color: fg, opacity: exploded ? 1 : 0.7 }}
+        >
+          <Icon.Layers on={exploded} />
+        </button>
       </div>
 
-      {/* Hint */}
-      <div
-        ref={progressRef}
-        style={{
-          position: "absolute",
-          right: 18,
-          top: "50%",
-          transform: "translateY(-50%)",
-          fontSize: 11,
-          letterSpacing: "0.08em",
-          color: "#bdbab0",
-          writingMode: "vertical-rl",
-          pointerEvents: "none",
-        }}
-      >
-        SCROLL
+      {/* Title + counter */}
+      <div style={titleRow}>
+        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>
+          lamp
+        </span>
+        <span style={{ fontSize: 20, fontWeight: 600 }}>
+          {pad(index + 1)} <span style={{ color: muted }}>/ {pad(MODELS.length)}</span>
+        </span>
+      </div>
+
+      {/* Right-side pager */}
+      <div style={pager}>
+        <button
+          aria-label="Førre"
+          onClick={() => go(-1)}
+          disabled={index === 0}
+          style={{ ...pagerBtn, color: fg, opacity: index === 0 ? 0.25 : 0.8 }}
+        >
+          <Icon.Chevron dir="up" />
+        </button>
+        {MODELS.map((m, i) => (
+          <button
+            key={m.url}
+            aria-label={m.name}
+            onClick={() => setIndex(i)}
+            style={{
+              ...dot,
+              background: i === index ? fg : "transparent",
+              borderColor: i === index ? fg : muted,
+            }}
+          />
+        ))}
+        <button
+          aria-label="Neste"
+          onClick={() => go(1)}
+          disabled={index === MODELS.length - 1}
+          style={{
+            ...pagerBtn,
+            color: fg,
+            opacity: index === MODELS.length - 1 ? 0.25 : 0.8,
+          }}
+        >
+          <Icon.Chevron dir="down" />
+        </button>
       </div>
     </main>
   );
 }
+
+/* ---------- styles ---------- */
+const topBar: React.CSSProperties = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  display: "flex",
+  justifyContent: "space-between",
+  padding: "1.5rem",
+};
+const titleRow: React.CSSProperties = {
+  position: "absolute",
+  top: "4.2rem",
+  left: 0,
+  right: 0,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "baseline",
+  padding: "0 1.5rem",
+};
+const iconBtn: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  padding: 4,
+  display: "flex",
+  transition: "filter 0.4s ease, opacity 0.3s ease",
+};
+const pager: React.CSSProperties = {
+  position: "absolute",
+  right: 16,
+  top: "50%",
+  transform: "translateY(-50%)",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 12,
+};
+const pagerBtn: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  padding: 0,
+  display: "flex",
+};
+const dot: React.CSSProperties = {
+  width: 9,
+  height: 9,
+  borderRadius: "50%",
+  border: "1.5px solid",
+  cursor: "pointer",
+  padding: 0,
+  transition: "background 0.25s ease, border-color 0.25s ease",
+};
