@@ -8,14 +8,27 @@ import {
   useRef,
   useState,
 } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 
-type Model = { name: string; url: string; scale?: number };
+type Model = {
+  name: string;
+  url: string;
+  scale?: number;
+  camera?: [number, number, number];
+};
+
+const DEFAULT_CAM: [number, number, number] = [0, 0, 6];
 
 const MODELS: Model[] = [
-  { name: "Desk Lamp", url: "/models/desk_lamp_scene.glb" },
+  // Desk scene reads best from an elevated 3/4 top-down angle.
+  {
+    name: "Desk Lamp",
+    url: "/models/desk_lamp_scene.glb",
+    scale: 0.9,
+    camera: [1.5, 3.2, 6],
+  },
   { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
   { name: "Lamp 02", url: "/models/lamp_02.glb" },
   { name: "Lamp 03", url: "/models/lamp_03.glb", scale: 0.8 },
@@ -137,6 +150,23 @@ function ActiveModel({
   );
 }
 
+/** Moves the camera to each model's preferred angle when the model changes. */
+function CameraRig({ pos }: { pos: [number, number, number] }) {
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as unknown as
+    | { target: THREE.Vector3; update: () => void }
+    | null;
+  useEffect(() => {
+    camera.position.set(pos[0], pos[1], pos[2]);
+    camera.updateProjectionMatrix();
+    if (controls) {
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+  }, [pos, camera, controls]);
+  return null;
+}
+
 function Scene({
   index,
   exploded,
@@ -184,6 +214,7 @@ function Scene({
         rotateSpeed={0.85}
         target={[0, 0, 0]}
       />
+      <CameraRig pos={model.camera ?? DEFAULT_CAM} />
     </>
   );
 }
