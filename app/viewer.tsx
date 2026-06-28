@@ -26,7 +26,13 @@ type Model = {
 const DEFAULT_CAM: [number, number, number] = [0, 0, 6];
 
 const MODELS: Model[] = [
-  // Desk scene reads best from an elevated 3/4 top-down angle.
+  { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
+  // The oval frosted face is the lens (confirmed via part segmentation).
+  { name: "Lamp 02", url: "/models/lamp_02.glb", lens: ["tripo_part_4_material"] },
+  { name: "Lamp 03", url: "/models/lamp_03.glb", scale: 0.8 },
+  // Real micro:bit is only ~45x55 mm; it's not a lamp, so no bulb.
+  { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32, noBulb: true },
+  // Desk scene last; reads best from an elevated 3/4 top-down angle.
   {
     name: "Desk Lamp",
     url: "/models/desk_lamp_scene.glb",
@@ -34,12 +40,6 @@ const MODELS: Model[] = [
     camera: [1.5, 3.2, 6],
     noBulb: true, // a whole desk scene — no single light fixture
   },
-  { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
-  // The oval frosted face is the lens (confirmed via part segmentation).
-  { name: "Lamp 02", url: "/models/lamp_02.glb", lens: ["tripo_part_4_material"] },
-  { name: "Lamp 03", url: "/models/lamp_03.glb", scale: 0.8 },
-  // Real micro:bit is only ~45x55 mm; it's not a lamp, so no bulb.
-  { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32, noBulb: true },
 ];
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
