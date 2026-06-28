@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>lamp · iverfinne.no</title>
+  <meta name="description" content="lamp.iverfinne.no" />
+  <style>
+    :root {
+      --bg: #0b0b0c;
+      --fg: #f4f4f5;
+      --muted: #8a8a90;
+      --glow: #ffd479;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+      padding: 2rem;
+    }
+    main { max-width: 34rem; text-align: center; }
+    .lamp {
+      width: 96px; height: 96px; margin: 0 auto 2rem;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 40%, var(--glow), #b8801f 55%, #5a3d0c 100%);
+      box-shadow: 0 0 60px 12px rgba(255, 212, 121, .45);
+      animation: pulse 4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 60px 12px rgba(255, 212, 121, .35); }
+      50% { box-shadow: 0 0 90px 20px rgba(255, 212, 121, .6); }
+    }
+    h1 { font-size: 2rem; margin: 0 0 .5rem; letter-spacing: -.02em; }
+    p { color: var(--muted); margin: 0; }
+    a { color: var(--glow); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="lamp" aria-hidden="true"></div>
+    <h1>lamp</h1>
+    <p>lampe.iverfinne.no — kommer snart.</p>
+    <p style="margin-top:1rem"><a href="https://iverfinne.no">iverfinne.no</a></p>
+  </main>
+</body>
+</html>
