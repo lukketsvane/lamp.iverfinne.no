@@ -72,7 +72,7 @@ const MODELS: Model[] = [
     url: "/models/lamp_01_assembly.glb",
     scale: 0.85,
     assemble: true,
-    lens: ["tripo_part_3_material"],
+    lens: ["Ljomveg_Diffuser"],
   },
   // Lemljos — three frosted diffusers; matte wood.
   {
@@ -998,9 +998,6 @@ export default function Viewer() {
 
       {/* Bottom-centre: wood-finish picker ("Vel uttrykk"). */}
       <div style={{ ...finishRail, ...uiFade(uiIn) }}>
-        <span style={{ ...finishLabel, color: sub }}>
-          {FINISHES[finish].name}
-        </span>
         <div style={{ display: "flex", gap: 14 }}>
           {FINISHES.map((f, i) => (
             <button
@@ -1058,11 +1055,6 @@ const finishRail: React.CSSProperties = {
   alignItems: "center",
   gap: 10,
   pointerEvents: "auto",
-};
-const finishLabel: React.CSSProperties = {
-  fontSize: 11,
-  letterSpacing: "0.16em",
-  textTransform: "uppercase",
 };
 const finishSwatch: React.CSSProperties = {
   width: 34,
