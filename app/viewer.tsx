@@ -351,9 +351,9 @@ function ActiveModel({
         .copy(p.orig)
         .addScaledVector(p.dir, factor.current * EXPLODE_SPREAD);
     }
-    for (const m of lensMats) m.emissiveIntensity = glow.current * 2.6;
-    if (lightRef.current) lightRef.current.intensity = glow.current * 6;
-    if (spillRef.current) spillRef.current.intensity = glow.current * 2.6;
+    for (const m of lensMats) m.emissiveIntensity = glow.current * 1.9;
+    if (lightRef.current) lightRef.current.intensity = glow.current * 4.2;
+    if (spillRef.current) spillRef.current.intensity = glow.current * 1.8;
 
     // Scroll transition: slide vertically + spin, settling at the resting yaw.
     const g = groupRef.current;
@@ -572,10 +572,10 @@ function Scene({
       <EffectComposer>
         <Bloom
           mipmapBlur
-          intensity={dark ? 1.6 : 0.9}
-          luminanceThreshold={1.0}
-          luminanceSmoothing={0.2}
-          radius={0.7}
+          intensity={dark ? 0.85 : 0.5}
+          luminanceThreshold={1.05}
+          luminanceSmoothing={0.3}
+          radius={0.55}
         />
       </EffectComposer>
     </>
@@ -624,7 +624,13 @@ export default function Viewer() {
   const [bulbOn, setBulbOn] = useState(false);
   // Exploded view is temporarily disabled (button greyed out).
   const exploded = false;
-  const [dark, setDark] = useState(false);
+  // Theme: 'auto' follows the device, otherwise an explicit choice. Tap the
+  // toggle to flip light/dark; press-and-hold then drag for the full menu.
+  const [themeMode, setThemeMode] = useState<"auto" | "light" | "dark">("auto");
+  const [systemDark, setSystemDark] = useState(false);
+  const dark = themeMode === "auto" ? systemDark : themeMode === "dark";
+  const [themeMenu, setThemeMenu] = useState(false);
+  const [hoverOpt, setHoverOpt] = useState<string | null>(null);
   const wheelLock = useRef(false);
 
   // Scroll transition state.
@@ -662,15 +668,48 @@ export default function Viewer() {
     [jumpTo]
   );
 
-  // Follow the system/device theme dynamically; the manual toggle overrides
-  // until the device preference changes again.
+  // Track the device theme dynamically; used when themeMode === 'auto'.
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    setDark(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setDark(e.matches);
+    setSystemDark(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
+
+  // Theme toggle gesture: a quick tap flips light/dark; a press-and-hold opens
+  // a menu (Auto / Lys / Mørk) that you drag onto and release to pick.
+  const onThemeDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    let opened = false;
+    const timer = window.setTimeout(() => {
+      opened = true;
+      setThemeMenu(true);
+    }, 260);
+    const optAt = (x: number, y: number) =>
+      document
+        .elementFromPoint(x, y)
+        ?.closest("[data-theme-opt]")
+        ?.getAttribute("data-theme-opt") ?? null;
+    const move = (ev: PointerEvent) => {
+      if (opened) setHoverOpt(optAt(ev.clientX, ev.clientY));
+    };
+    const up = (ev: PointerEvent) => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      if (opened) {
+        const pick = optAt(ev.clientX, ev.clientY);
+        if (pick) setThemeMode(pick as "auto" | "light" | "dark");
+        setThemeMenu(false);
+        setHoverOpt(null);
+      } else {
+        setThemeMode(dark ? "light" : "dark");
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   // Keyboard: up/left = prev, down/right = next.
   useEffect(() => {
@@ -847,13 +886,46 @@ export default function Viewer() {
         >
           <Icon.Layers on={false} />
         </button>
-        <button
-          aria-label="Lyst/mørkt tema"
-          onClick={() => setDark((v) => !v)}
-          style={{ ...iconBtn, color: fg }}
-        >
-          <Icon.Theme />
-        </button>
+        <div style={{ position: "relative", display: "flex" }}>
+          {/* Hold-and-drag menu opens to the left of the toggle. */}
+          {themeMenu && (
+            <div style={{ ...themeMenuRow, color: fg }}>
+              {(
+                [
+                  ["auto", "Auto"],
+                  ["light", "Lys"],
+                  ["dark", "Mørk"],
+                ] as const
+              ).map(([k, label]) => (
+                <span
+                  key={k}
+                  data-theme-opt={k}
+                  style={{
+                    ...themeOpt,
+                    background:
+                      hoverOpt === k
+                        ? fg
+                        : themeMode === k
+                        ? dark
+                          ? "rgba(255,255,255,0.14)"
+                          : "rgba(0,0,0,0.08)"
+                        : "transparent",
+                    color: hoverOpt === k ? (dark ? "#111" : "#fff") : fg,
+                  }}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
+          <button
+            aria-label="Tema (trykk for å byte, hald for fleire val)"
+            onPointerDown={onThemeDown}
+            style={{ ...iconBtn, color: fg, touchAction: "none" }}
+          >
+            <Icon.Theme />
+          </button>
+        </div>
       </div>
 
       {/* Left rail: model dots */}
@@ -908,6 +980,27 @@ const corner: React.CSSProperties = {
   flexDirection: "column",
   alignItems: "center",
   gap: 20,
+};
+const themeMenuRow: React.CSSProperties = {
+  position: "absolute",
+  right: "calc(100% + 10px)",
+  top: "50%",
+  transform: "translateY(-50%)",
+  display: "flex",
+  gap: 4,
+  padding: 4,
+  borderRadius: 999,
+  background: "rgba(128,128,128,0.16)",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
+  whiteSpace: "nowrap",
+};
+const themeOpt: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 500,
+  padding: "5px 11px",
+  borderRadius: 999,
+  transition: "background 0.15s ease, color 0.15s ease",
 };
 const iconBtn: React.CSSProperties = {
   background: "none",
