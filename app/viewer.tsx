@@ -174,6 +174,34 @@ const MODELS: Model[] = [
     noGround: true,
     noBulb: true,
   },
+  // Companion wooden parts (single-mesh, not lamps).
+  {
+    name: "Stativ",
+    title: "Stativ",
+    hue: 30,
+    tagline: ["Eit stødig feste.", "Held alt på plass."],
+    url: "/models/wooden_stand.glb",
+    scale: 0.9,
+    noBulb: true,
+  },
+  {
+    name: "Pennehus",
+    title: "Pennehus",
+    hue: 40,
+    tagline: ["Plass til pennar.", "Orden på pulten."],
+    url: "/models/pen_holder.glb",
+    scale: 0.82,
+    noBulb: true,
+  },
+  {
+    name: "Batteri",
+    title: "Batteri",
+    hue: 205,
+    tagline: ["Kraft i reserve.", "Straum utan leidning."],
+    url: "/models/battery_holder.glb",
+    scale: 0.8,
+    noBulb: true,
+  },
   // Atelier (desk scene) hidden for now.
 ];
 
