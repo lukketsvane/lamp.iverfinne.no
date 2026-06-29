@@ -51,14 +51,23 @@ function polarOf([x, y, z]: [number, number, number]) {
 }
 
 const MODELS: Model[] = [
-  // Ljomveg — the assembly variant (separate, named parts).
+  // Kultist — oval frosted face (part_4). Placed first.
+  {
+    name: "Kultist",
+    title: "Kultist",
+    hue: 210,
+    tagline: ["Mjukt ljos.", "Eit jamt, matt skin."],
+    url: "/models/kultist.glb",
+    scale: 0.86,
+    lens: ["tripo_part_4_material"],
+  },
+  // Ljomveg — whole dome lamp (the assembly GLB ships exploded with no
+  // assembled reference, so we use the merged mesh of the same lamp).
   {
     name: "Ljomveg",
     title: "Ljomveg",
     hue: 32,
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
-    // The assembly GLB is exploded in 3D with no assembled reference, so it
-    // can't be collapsed back in code — use the whole mesh of the same lamp.
     url: "/models/lamp_01.glb",
     scale: 0.9,
     lens: ["tripo_part_0_material"], // the frosted dome
@@ -79,16 +88,6 @@ const MODELS: Model[] = [
       "tripo_part_5_material",
       "tripo_part_9_material",
     ],
-  },
-  // Kultist — oval frosted face (part_4).
-  {
-    name: "Kultist",
-    title: "Kultist",
-    hue: 210,
-    tagline: ["Mjukt ljos.", "Eit jamt, matt skin."],
-    url: "/models/kultist.glb",
-    scale: 0.86,
-    lens: ["tripo_part_4_material"],
   },
 ];
 
@@ -427,18 +426,19 @@ function KeyLight({
     <directionalLight
       castShadow
       position={[x, y, z]}
-      intensity={dark ? 0.5 : 2.1}
-      color={dark ? "#ffe0b8" : "#ffffff"}
-      shadow-mapSize-width={1024}
-      shadow-mapSize-height={1024}
-      shadow-radius={2}
-      shadow-bias={-0.0004}
+      intensity={dark ? 0.95 : 2.7}
+      color={dark ? "#ffe0b8" : "#fffaf2"}
+      shadow-mapSize-width={2048}
+      shadow-mapSize-height={2048}
+      shadow-radius={2.5}
+      shadow-bias={-0.0002}
+      shadow-normalBias={0.025}
       shadow-camera-near={0.5}
-      shadow-camera-far={30}
-      shadow-camera-left={-5}
-      shadow-camera-right={5}
-      shadow-camera-top={5}
-      shadow-camera-bottom={-5}
+      shadow-camera-far={24}
+      shadow-camera-left={-3.4}
+      shadow-camera-right={3.4}
+      shadow-camera-top={3.4}
+      shadow-camera-bottom={-3.4}
     />
   );
 }
@@ -472,16 +472,14 @@ function Scene({
   const ex = exiting ? MODELS[exiting.index] : null;
   return (
     <>
-      {/* Studio three-point lighting (no environment map). The key light casts
-          a hard, defined shadow onto the ground plane. */}
-      {/* Almost no ambient — directional studio lights do the work for a
-          high-contrast, realistic look. */}
-      {/* No ambient and no environment map — pure directional studio lights. */}
+      {/* Pure directional studio lighting — no ambient, no environment map.
+          The key light casts a high-res soft shadow. */}
       <KeyLight az={lightAz} el={lightEl} dark={dark} />
-      {/* Fill from the opposite side keeps shadows from going pure black. */}
+      {/* A faint fill keeps shadows from going pure black without flattening
+          them — much weaker than the key for high contrast. */}
       <directionalLight
         position={[-5, 3, 2]}
-        intensity={dark ? 0.18 : 0.65}
+        intensity={dark ? 0.1 : 0.4}
         color={dark ? "#9fb2cc" : "#dfe6f0"}
       />
       {/* Rim/back light separates the model from the backdrop. */}
@@ -832,12 +830,13 @@ export default function Viewer() {
     >
       <Canvas
         dpr={[1, 2]}
-        shadows
+        shadows="soft"
         camera={{ position: [0, 0, 6], fov: 40 }}
         gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 1.05;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
         <Scene
