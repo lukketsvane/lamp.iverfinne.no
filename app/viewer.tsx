@@ -48,7 +48,7 @@ function polarOf([x, y, z]: [number, number, number]) {
   return Math.acos(Math.max(-1, Math.min(1, y / r)));
 }
 
-const MODELS: Model[] = [
+const ALL_MODELS: Model[] = [
   // Mysa (was lamp_04): part_0 = wooden shade disc, part_1 = column; part_2 is
   // the diffuser sitting under the shade — the light source.
   {
@@ -186,6 +186,9 @@ const MODELS: Model[] = [
   },
   // Atelier (desk scene) hidden for now.
 ];
+
+// Only the first three are shown for now.
+const MODELS: Model[] = ALL_MODELS.slice(0, 3);
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
 
@@ -329,8 +332,18 @@ function ActiveModel({
           meshIsLens = true;
         }
         if (matte && c.isMeshStandardMaterial) {
+          // Force a fully diffuse finish: maps would otherwise override the
+          // scalar roughness/metalness and keep the surface glossy.
           c.roughness = 1;
           c.metalness = 0;
+          c.roughnessMap = null;
+          c.metalnessMap = null;
+          c.envMapIntensity = 0;
+          const phys = c as THREE.MeshPhysicalMaterial;
+          if ("clearcoat" in phys) phys.clearcoat = 0;
+          if ("sheen" in phys) phys.sheen = 0;
+          if ("specularIntensity" in phys) phys.specularIntensity = 0;
+          c.needsUpdate = true;
         }
         return c;
       });
