@@ -19,16 +19,6 @@ type Model = {
   title: string;
   /** Two-line tagline shown under the title. */
   tagline: [string, string];
-  /** Longer descriptive paragraph for the hero (falls back to the tagline). */
-  blurb?: string;
-  /** Spec sheet shown in the "Mål og detaljar" details overlay. */
-  specs?: {
-    height: string;
-    width: string;
-    diameter?: string;
-    material: string;
-    light: string;
-  };
   url: string;
   scale?: number;
   /** Extra vertical nudge (world units) for per-model framing. */
@@ -66,17 +56,9 @@ const MODELS: Model[] = [
     title: "Ljomveg",
     hue: 32,
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
-    blurb:
-      "Eit ljos som skapar ro. Varmt, dimbart lys og naturleg eik – opplyst frå innsida, forma for kvardagslege ritual.",
-    specs: {
-      height: "240 mm",
-      width: "280 mm",
-      diameter: "ø60 mm",
-      material: "Massiv eik, sandblåst og olja",
-      light: "Integrert LED 1800–3000K",
-    },
     url: "/models/mysa.glb",
     scale: 0.82,
+    offsetY: 0.42,
     lens: ["tripo_part_2_material"],
   },
   // Aure (was lamp_03): three frosted diffusers — the left & right side
@@ -168,9 +150,9 @@ const MODELS: Model[] = [
     title: "micro:bit",
     hue: 215,
     tagline: ["Lita maskin.", "Ikkje ei lampe i det heile."],
-    url: "/models/microbit_2.glb",
+    url: "/models/microbit_3.glb",
     scale: 0.3,
-    offsetY: 0.7, // float a bit higher than the lamps (no ground)
+    offsetY: 0.5, // cancel the standard drop so it sits dead-centre
     noGround: true,
     noBulb: true,
   },
@@ -209,10 +191,6 @@ MODELS.forEach((m) => useGLTF.preload(m.url));
 
 const WARM = new THREE.Color("#ffcf8a");
 const EXPLODE_SPREAD = 1.6;
-// Resting vertical centre of the model, dropped so it clears the tall hero
-// text and sits in the middle band above the feature strip.
-const FRAME_Y = -0.95;
-const FIT = 2.1; // world-space size the largest model dimension fills
 
 // Background colour swatches revealed by holding + dragging the theme toggle.
 const THEME_COLORS: { hue: number; swatch: string }[] = [
@@ -377,7 +355,7 @@ function ActiveModel({
     });
 
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    const s = (FIT * scale) / maxDim;
+    const s = (2.4 * scale) / maxDim;
 
     // Place the interior light at the centre of the lit diffuser so the glow
     // comes from inside the shade — not a stray hotspot in the base.
@@ -418,7 +396,7 @@ function ActiveModel({
     // Scroll transition: slide vertically + spin, settling at the resting yaw.
     const g = groupRef.current;
     if (g) {
-      const frameY = FRAME_Y + offsetY;
+      const frameY = -0.5 + offsetY;
       prog.current = Math.min(1, prog.current + dt * TRANS_SPEED);
       const e = easeOutCubic(prog.current);
       if (mode === "enter") {
@@ -438,7 +416,7 @@ function ActiveModel({
   // Drop the whole assembly (model + ground) a little below centre so it clears
   // the heading text and reads as standing on a surface. The initial Y is the
   // off-screen start for the enter animation.
-  const frameY = FRAME_Y + offsetY;
+  const frameY = -0.5 + offsetY;
   const startY = mode === "enter" ? frameY - transitionDir * SLIDE : frameY;
 
   return (
@@ -677,123 +655,6 @@ const Icon = {
       <path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" />
     </svg>
   ),
-  Bag: () => (
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M6 8h12l-1 12H7L6 8Zm3 0V6a3 3 0 0 1 6 0v2"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
-  Menu: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M4 7h16M4 12h16M4 17h16"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-      />
-    </svg>
-  ),
-  Arrow: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M4 12h15m-6-6 6 6-6 6"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
-  Leaf: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M4 20c0-8 6-14 16-14 0 10-6 16-14 16M6 18c3-6 6-8 10-9"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
-  Sun: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth={STROKE} />
-      <path
-        d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-      />
-    </svg>
-  ),
-  Shield: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3Zm-2.5 9 1.8 1.8L15 10"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
-  Back: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M20 12H5m6-6-6 6 6 6"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
-  Height: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 4v16M8 7l4-3 4 3M8 17l4 3 4-3"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
-  Width: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M4 12h16M7 8l-3 4 3 4M17 8l3 4-3 4"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
-  Material: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <rect
-        x="4"
-        y="4"
-        width="16"
-        height="16"
-        rx="3"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-      />
-      <path
-        d="M6 10c3 1 9 1 12 0M6 14c3 1 9 1 12 0"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-      />
-    </svg>
-  ),
 };
 
 export default function Viewer() {
@@ -811,8 +672,6 @@ export default function Viewer() {
   // Chosen background colour (hue) from the hold-drag swatch menu; null follows
   // the per-model hue.
   const [tint, setTint] = useState<number | null>(null);
-  // "Mål og detaljar" spec overlay.
-  const [details, setDetails] = useState(false);
   const wheelLock = useRef(false);
 
   // Scroll transition state.
@@ -984,8 +843,6 @@ export default function Viewer() {
   const overlay = dark
     ? "radial-gradient(125% 95% at 60% 36%, rgba(255,240,220,0.06), rgba(0,0,0,0.45) 72%)"
     : "radial-gradient(125% 95% at 50% 34%, rgba(255,255,255,0.5), rgba(60,55,45,0.07) 72%)";
-  const accent = `hsl(${h} 48% ${dark ? "62%" : "42%"})`;
-  const chipBg = dark ? "rgba(40,38,44,0.55)" : "rgba(255,255,255,0.6)";
   const bulbDisabled = !!model.noBulb;
 
   return (
@@ -1028,65 +885,44 @@ export default function Viewer() {
         />
       </Canvas>
 
-      {/* Top nav bar */}
-      <header style={navbar}>
-        <span style={{ ...wordmark, color: fg }}>lamp.iverfinne.no</span>
-        <div style={{ display: "flex", gap: 16 }}>
-          <button aria-label="Handlekorg" style={{ ...iconBtn, color: fg }}>
-            <Icon.Bag />
-          </button>
-          <button aria-label="Meny" style={{ ...iconBtn, color: fg }}>
-            <Icon.Menu />
-          </button>
-        </div>
-      </header>
-
-      {/* Hero: eyebrow + serif title + blurb + explore link */}
+      {/* Top-left: serif model name + tagline */}
       <div style={heading}>
-        <div style={{ ...eyebrow, color: accent }}>NYHET</div>
         <h1 style={{ ...title, color: fg }}>{model.title}</h1>
-        <p style={{ ...blurbText, color: sub }}>
-          {model.blurb ?? `${model.tagline[0]} ${model.tagline[1]}`}
+        <p style={{ ...tagline, color: sub }}>
+          {model.tagline[0]}
+          <br />
+          {model.tagline[1]}
         </p>
-        <button
-          onClick={() => (model.specs ? setDetails(true) : setBulbOn((v) => !v))}
-          style={{ ...exploreLink, color: fg, borderColor: accent }}
-        >
-          Utforsk {model.title} <Icon.Arrow />
-        </button>
       </div>
 
-      {/* Right rail: circular controls */}
+      {/* Top-right: stacked controls */}
       <div style={corner}>
         <button
           aria-label="Slå lampa av/på"
           onClick={() => !bulbDisabled && setBulbOn((v) => !v)}
           disabled={bulbDisabled}
           style={{
-            ...iconChip,
-            background: chipBg,
+            ...iconBtn,
             color: fg,
-            opacity: bulbDisabled ? 0.4 : 1,
+            opacity: bulbDisabled ? 0.25 : 1,
             cursor: bulbDisabled ? "default" : "pointer",
-            boxShadow:
+            filter:
               bulbOn && !bulbDisabled
-                ? "0 0 16px rgba(255,200,120,0.6), 0 2px 8px rgba(0,0,0,0.12)"
-                : "0 2px 8px rgba(0,0,0,0.12)",
+                ? "drop-shadow(0 0 10px rgba(255,200,120,0.9))"
+                : "none",
           }}
         >
           <Icon.Bulb on={bulbOn && !bulbDisabled} />
         </button>
         <button
-          aria-label="Mål og detaljar"
-          onClick={() => model.specs && setDetails(true)}
-          disabled={!model.specs}
+          aria-label="Exploded view (utilgjengeleg)"
+          disabled
+          title="Kjem snart"
           style={{
-            ...iconChip,
-            background: chipBg,
-            color: fg,
-            opacity: model.specs ? 1 : 0.45,
-            cursor: model.specs ? "pointer" : "default",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+            ...iconBtn,
+            color: muted,
+            opacity: 0.4,
+            cursor: "default",
           }}
         >
           <Icon.Layers on={false} />
@@ -1121,13 +957,7 @@ export default function Viewer() {
           <button
             aria-label="Tema (trykk for å byte, hald for fleire val)"
             onPointerDown={onThemeDown}
-            style={{
-              ...iconChip,
-              background: chipBg,
-              color: fg,
-              touchAction: "none",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-            }}
+            style={{ ...iconBtn, color: fg, touchAction: "none" }}
           >
             <Icon.Theme />
           </button>
@@ -1152,268 +982,40 @@ export default function Viewer() {
           />
         ))}
       </div>
-
-      {/* Bottom feature strip */}
-      <div style={{ ...featureBar, background: chipBg, color: fg }}>
-        {(
-          [
-            [<Icon.Leaf key="l" />, "Massivt eiketre", "Naturleg og tidlaust"],
-            [<Icon.Sun key="s" />, "Justerbart lys", "Varmt 1800–3000K"],
-            [<Icon.Shield key="h" />, "Skapt for å vare", "Kvalitet i kvar detalj"],
-          ] as const
-        ).map(([icon, t, s], i) => (
-          <div key={t} style={feature}>
-            {i > 0 && <span style={{ ...featureDivide, background: muted }} />}
-            <span style={{ color: accent, display: "flex" }}>{icon}</span>
-            <span style={{ display: "flex", flexDirection: "column" }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{t}</span>
-              <span style={{ fontSize: 11, color: sub }}>{s}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* "Mål og detaljar" spec overlay */}
-      {details && model.specs && (
-        <div
-          style={{
-            ...detailsOverlay,
-            backgroundColor: baseBg,
-            backgroundImage: overlay,
-            color: fg,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              aria-label="Tilbake"
-              onClick={() => setDetails(false)}
-              style={{
-                ...iconChip,
-                background: chipBg,
-                color: fg,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-              }}
-            >
-              <Icon.Back />
-            </button>
-          </div>
-          <div style={{ ...eyebrow, color: accent, marginTop: "0.5rem" }}>
-            NYHET
-          </div>
-          <h1
-            style={{
-              ...title,
-              color: fg,
-              fontSize: "clamp(34px, 12vw, 58px)",
-            }}
-          >
-            Mål og detaljar
-          </h1>
-          <p style={{ ...blurbText, color: sub, marginTop: "0.9rem" }}>
-            Gjennomtenkt form og materiale. Ljos som varer – skapt for
-            kvardagslege ritual.
-          </p>
-          <div style={specGrid}>
-            {(
-              [
-                [<Icon.Height key="h" />, "Høgd", model.specs.height],
-                [<Icon.Width key="w" />, "Breidd", model.specs.width],
-                [<Icon.Material key="m" />, "Materiale", model.specs.material],
-                [<Icon.Sun key="l" />, "Lyskjelde", model.specs.light],
-              ] as const
-            ).map(([icon, label, value]) => (
-              <div
-                key={label}
-                style={{ ...specCard, background: chipBg, borderColor: muted }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ color: accent, display: "flex" }}>{icon}</span>
-                  <span style={{ fontSize: 17, fontWeight: 600 }}>{label}</span>
-                </div>
-                <div style={{ marginTop: 10, fontSize: 15, color: sub }}>
-                  {value}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ ...specNote, color: sub }}>
-            <span
-              style={{
-                ...specNoteDot,
-                borderColor: muted,
-                color: sub,
-              }}
-            >
-              i
-            </span>
-            Små variasjonar kan førekomme grunna naturlege materiale.
-          </div>
-        </div>
-      )}
     </main>
   );
 }
 
 /* ---------- styles ---------- */
-const navbar: React.CSSProperties = {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  height: "3.4rem",
-  padding: "0 1.5rem",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  zIndex: 3,
-};
-const wordmark: React.CSSProperties = {
-  fontFamily: "var(--font-serif), Georgia, 'Times New Roman', serif",
-  fontSize: 19,
-  letterSpacing: "0.01em",
-};
 const heading: React.CSSProperties = {
   position: "absolute",
-  top: "4.6rem",
+  top: "3rem",
   left: "1.5rem",
-  maxWidth: "82vw",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "flex-start",
-};
-const eyebrow: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: "0.32em",
-  marginBottom: "0.5rem",
+  maxWidth: "70vw",
+  pointerEvents: "none",
 };
 const title: React.CSSProperties = {
   fontFamily: "var(--font-serif), Georgia, 'Times New Roman', serif",
   fontWeight: 500,
-  fontSize: "clamp(42px, 15vw, 80px)",
+  fontSize: "clamp(46px, 16vw, 84px)",
   lineHeight: 0.95,
   letterSpacing: "-0.01em",
 };
-const blurbText: React.CSSProperties = {
-  marginTop: "1rem",
-  maxWidth: "26rem",
-  fontSize: "clamp(14px, 4.3vw, 17px)",
+const tagline: React.CSSProperties = {
+  marginTop: "0.85rem",
+  fontSize: "clamp(15px, 4.6vw, 19px)",
   fontWeight: 400,
-  lineHeight: 1.45,
+  lineHeight: 1.35,
   letterSpacing: "0.01em",
-};
-const exploreLink: React.CSSProperties = {
-  marginTop: "1.4rem",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  background: "none",
-  border: "none",
-  borderBottom: "1.5px solid",
-  padding: "0 0 4px",
-  fontSize: 16,
-  fontWeight: 500,
-  cursor: "pointer",
 };
 const corner: React.CSSProperties = {
   position: "absolute",
-  top: "50%",
-  transform: "translateY(-50%)",
-  right: "1.25rem",
+  bottom: "2rem",
+  right: "1.5rem",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
-  gap: 16,
-  zIndex: 3,
-};
-const iconChip: React.CSSProperties = {
-  width: 46,
-  height: 46,
-  borderRadius: "50%",
-  border: "none",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  cursor: "pointer",
-  backdropFilter: "blur(8px)",
-  WebkitBackdropFilter: "blur(8px)",
-  transition: "box-shadow 0.3s ease, opacity 0.3s ease",
-};
-const featureBar: React.CSSProperties = {
-  position: "absolute",
-  bottom: "1.1rem",
-  left: "1rem",
-  right: "1rem",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 6,
-  padding: "0.8rem 0.9rem",
-  borderRadius: 18,
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
-  boxShadow: "0 4px 18px rgba(0,0,0,0.1)",
-};
-const feature: React.CSSProperties = {
-  position: "relative",
-  flex: 1,
-  display: "flex",
-  alignItems: "center",
-  gap: 9,
-  paddingLeft: 10,
-};
-const featureDivide: React.CSSProperties = {
-  position: "absolute",
-  left: -3,
-  top: "50%",
-  transform: "translateY(-50%)",
-  width: 1,
-  height: "70%",
-  opacity: 0.3,
-};
-const detailsOverlay: React.CSSProperties = {
-  position: "absolute",
-  inset: 0,
-  zIndex: 5,
-  padding: "1.5rem 1.5rem 2rem",
-  overflowY: "auto",
-  display: "flex",
-  flexDirection: "column",
-};
-const specGrid: React.CSSProperties = {
-  marginTop: "1.8rem",
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: 12,
-};
-const specCard: React.CSSProperties = {
-  borderRadius: 16,
-  padding: "1.1rem",
-  border: "1px solid",
-  borderColor: "transparent",
-  backdropFilter: "blur(8px)",
-  WebkitBackdropFilter: "blur(8px)",
-  minHeight: 104,
-};
-const specNote: React.CSSProperties = {
-  marginTop: "auto",
-  paddingTop: "1.6rem",
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  fontSize: 13,
-};
-const specNoteDot: React.CSSProperties = {
-  flexShrink: 0,
-  width: 20,
-  height: 20,
-  borderRadius: "50%",
-  border: "1.4px solid",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 11,
-  fontStyle: "italic",
-  fontFamily: "var(--font-serif), Georgia, serif",
+  gap: 20,
 };
 const themeMenuRow: React.CSSProperties = {
   position: "absolute",
