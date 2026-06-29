@@ -118,9 +118,9 @@ const MODELS: Model[] = [
     tagline: ["Ståande ljos.", "Roleg i eit hjørne."],
     url: "/models/stand_lamp_01.glb",
     scale: 0.86,
-    lens: ["tripo_part_3_material"],
+    lens: ["tripo_part_0_material"], // the inner light panel under the head
   },
-  // Lantern: part_5 is the diffuser at the top of the inner column.
+  // Lantern: the inner column (part_1) is the glowing candle/diffuser.
   {
     name: "Lamp 5",
     title: "Lykt",
@@ -129,7 +129,7 @@ const MODELS: Model[] = [
     url: "/models/lamp_5.glb",
     scale: 0.86,
     offsetX: -0.18, // re-centre — its origin sits off to one side
-    lens: ["tripo_part_5_material"],
+    lens: ["tripo_part_1_material"],
   },
   // Glo (was lamp_01): part_5 is the thin front panel mid-body — the diffuser.
   // Placed just before micro:bit per request.
@@ -140,7 +140,8 @@ const MODELS: Model[] = [
     tagline: ["Roleg varme.", "Eit skin som legg seg."],
     url: "/models/lamp_01.glb",
     scale: 0.9,
-    lens: ["tripo_part_5_material"],
+    lens: ["tripo_part_0_material"], // the frosted dome
+
   },
   // Real micro:bit is tiny; it's not a lamp, so no bulb. Floats centred in the
   // viewport with no ground plane.
