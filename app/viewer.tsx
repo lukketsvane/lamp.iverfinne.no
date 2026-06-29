@@ -32,6 +32,7 @@ function polarOf([x, y, z]: [number, number, number]) {
 }
 
 const MODELS: Model[] = [
+  { name: "Lamp 01", url: "/models/lamp_01.glb" },
   // The oval frosted face is the lens (confirmed via part segmentation).
   { name: "Lamp 02", url: "/models/lamp_02.glb", lens: ["tripo_part_4_material"] },
   { name: "Lamp 03", url: "/models/lamp_03.glb", scale: 0.8 },
