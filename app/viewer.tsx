@@ -33,6 +33,8 @@ type Model = {
   hue: number;
   /** Force a fully matte finish (roughness 1, no metalness/sheen). */
   matte?: boolean;
+  /** Collapse an exploded assembly back onto its central axis (make it whole). */
+  assemble?: boolean;
   camera?: [number, number, number];
   /** Explicit lens material-name substrings (overrides auto-detection). */
   lens?: string[];
@@ -55,9 +57,11 @@ const MODELS: Model[] = [
     title: "Ljomveg",
     hue: 32,
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
-    url: "/models/lamp_01_assembly.glb",
-    scale: 0.85,
-    lens: ["tripo_part_3_material"],
+    // The assembly GLB is exploded in 3D with no assembled reference, so it
+    // can't be collapsed back in code — use the whole mesh of the same lamp.
+    url: "/models/lamp_01.glb",
+    scale: 0.9,
+    lens: ["tripo_part_0_material"], // the frosted dome
   },
   // Lemljos — three frosted diffusers; matte wood.
   {
@@ -85,16 +89,6 @@ const MODELS: Model[] = [
     url: "/models/kultist.glb",
     scale: 0.86,
     lens: ["tripo_part_4_material"],
-  },
-  // Glo — the merged dome lamp (part_0 dome).
-  {
-    name: "Glo",
-    title: "Glo",
-    hue: 50,
-    tagline: ["Roleg varme.", "Eit skin som legg seg."],
-    url: "/models/lamp_01.glb",
-    scale: 0.9,
-    lens: ["tripo_part_0_material"],
   },
 ];
 
@@ -170,6 +164,7 @@ function ActiveModel({
   yaw = 0,
   noGround = false,
   matte = false,
+  assemble = false,
   exploded,
   bulbOn,
   lensNames,
@@ -185,6 +180,7 @@ function ActiveModel({
   yaw?: number;
   noGround?: boolean;
   matte?: boolean;
+  assemble?: boolean;
   exploded: boolean;
   bulbOn: boolean;
   lensNames?: string[];
@@ -206,6 +202,18 @@ function ActiveModel({
 
   const { root, parts, lensMats, groundY, lightPos } = useMemo(() => {
     const clone = scene.clone(true);
+
+    // Collapse an exploded assembly onto its central (Y) axis so the parts sit
+    // concentrically and form the whole lamp again.
+    if (assemble) {
+      clone.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) {
+          m.position.x = 0;
+          m.position.z = 0;
+        }
+      });
+    }
     clone.updateMatrixWorld(true);
 
     const box = new THREE.Box3().setFromObject(clone);
@@ -303,7 +311,7 @@ function ActiveModel({
     // Bottom of the (centered) model after scaling — the ground line.
     const groundY = -(size.y * s) / 2;
     return { root: wrap, parts, lensMats, groundY, lightPos };
-  }, [scene, scale, lensNames, matte]);
+  }, [scene, scale, lensNames, matte, assemble]);
 
   useFrame((_, dt) => {
     const k = Math.min(1, dt * 5);
@@ -493,6 +501,7 @@ function Scene({
           yaw={model.yaw}
           noGround={model.noGround}
           matte={model.matte}
+          assemble={model.assemble}
           exploded={exploded}
           bulbOn={bulbOn && !model.noBulb}
           lensNames={model.lens}
@@ -510,6 +519,7 @@ function Scene({
             yaw={ex.yaw}
             noGround={ex.noGround}
             matte={ex.matte}
+            assemble={ex.assemble}
             exploded={false}
             bulbOn={bulbOn && !ex.noBulb}
             lensNames={ex.lens}
