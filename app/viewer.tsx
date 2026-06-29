@@ -48,30 +48,27 @@ function polarOf([x, y, z]: [number, number, number]) {
   return Math.acos(Math.max(-1, Math.min(1, y / r)));
 }
 
-const ALL_MODELS: Model[] = [
-  // Mysa (was lamp_04): part_0 = wooden shade disc, part_1 = column; part_2 is
-  // the diffuser sitting under the shade — the light source.
+const MODELS: Model[] = [
+  // Ljomveg — the assembly variant (separate, named parts).
   {
     name: "Ljomveg",
     title: "Ljomveg",
     hue: 32,
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
-    url: "/models/mysa.glb",
-    scale: 0.82,
-    offsetY: 0.42,
-    lens: ["tripo_part_2_material"],
+    url: "/models/lamp_01_assembly.glb",
+    scale: 0.85,
+    lens: ["tripo_part_3_material"],
   },
-  // Aure (was lamp_03): three frosted diffusers — the left & right side
-  // panels (part_4, part_5) and the top discs (part_2, part_9). All glow.
+  // Lemljos — three frosted diffusers; matte wood.
   {
     name: "Lemljos",
     title: "Lemljos",
     hue: 28,
     tagline: ["Dempa modus.", "Mjukt ljos for kveldsrom."],
     url: "/models/aure.glb",
-    scale: 0.57, // 30% smaller
-    matte: true, // matte wood, not shiny
-    yaw: Math.PI / 2, // turn a frosted panel toward the viewer on load
+    scale: 0.57,
+    matte: true,
+    yaw: Math.PI / 2,
     lens: [
       "tripo_part_2_material",
       "tripo_part_4_material",
@@ -79,7 +76,7 @@ const ALL_MODELS: Model[] = [
       "tripo_part_9_material",
     ],
   },
-  // Kultist (was lamp_02): the oval frosted face is the lens (part_4).
+  // Kultist — oval frosted face (part_4).
   {
     name: "Kultist",
     title: "Kultist",
@@ -89,106 +86,17 @@ const ALL_MODELS: Model[] = [
     scale: 0.86,
     lens: ["tripo_part_4_material"],
   },
+  // Glo — the merged dome lamp (part_0 dome).
   {
-    name: "Clamp Lamp",
-    title: "Pivot",
-    hue: 150,
-    tagline: ["Arbeidslys.", "Retta dit du treng det."],
-    url: "/models/clamp_lamp_01.glb",
-    scale: 1.12, // 30% larger
-    noGround: true, // clamps onto an edge — no floor beneath it
-  },
-  // Flower-shaped clamp lamp; part_7 is the round diffuser disc.
-  {
-    name: "Clamp Lamp 02",
-    title: "Blome",
-    hue: 350,
-    tagline: ["Klypelys.", "Ein blome som lyser."],
-    url: "/models/clamp_lamp_02.glb",
-    scale: 1.12, // 30% larger
-    noGround: true,
-    lens: ["tripo_part_7_material"],
-  },
-  // Stand lamp: no frosted diffuser of its own — part_3 (the shade body) is
-  // made emissive and lit from an interior light.
-  {
-    name: "Stand Lamp",
-    title: "Søyle",
-    hue: 42,
-    tagline: ["Ståande ljos.", "Roleg i eit hjørne."],
-    url: "/models/stand_lamp_01.glb",
-    scale: 0.86,
-    lens: ["tripo_part_0_material"], // the inner light panel under the head
-  },
-  // Lantern: the inner column (part_1) is the glowing candle/diffuser.
-  {
-    name: "Lamp 5",
-    title: "Lykt",
-    hue: 45,
-    tagline: ["Bera ljoset.", "Ei lykt for natta."],
-    url: "/models/lamp_5.glb",
-    scale: 0.86,
-    offsetX: -0.18, // re-centre — its origin sits off to one side
-    lens: ["tripo_part_1_material"],
-  },
-  // Glo (was lamp_01): part_5 is the thin front panel mid-body — the diffuser.
-  // Placed just before micro:bit per request.
-  {
-    name: "Lamp 01",
+    name: "Glo",
     title: "Glo",
     hue: 50,
     tagline: ["Roleg varme.", "Eit skin som legg seg."],
     url: "/models/lamp_01.glb",
     scale: 0.9,
-    lens: ["tripo_part_0_material"], // the frosted dome
-
+    lens: ["tripo_part_0_material"],
   },
-  // Real micro:bit is tiny; it's not a lamp, so no bulb. Floats centred in the
-  // viewport with no ground plane.
-  {
-    name: "micro:bit",
-    title: "micro:bit",
-    hue: 215,
-    tagline: ["Lita maskin.", "Ikkje ei lampe i det heile."],
-    url: "/models/microbit_3.glb",
-    scale: 0.3,
-    offsetY: 0.5, // cancel the standard drop so it sits dead-centre
-    noGround: true,
-    noBulb: true,
-  },
-  // Companion wooden parts (single-mesh, not lamps).
-  {
-    name: "Stativ",
-    title: "Stativ",
-    hue: 30,
-    tagline: ["Eit stødig feste.", "Held alt på plass."],
-    url: "/models/wooden_stand.glb",
-    scale: 0.9,
-    noBulb: true,
-  },
-  {
-    name: "Pennehus",
-    title: "Pennehus",
-    hue: 40,
-    tagline: ["Plass til pennar.", "Orden på pulten."],
-    url: "/models/pen_holder.glb",
-    scale: 0.82,
-    noBulb: true,
-  },
-  {
-    name: "Batteri",
-    title: "Batteri",
-    hue: 205,
-    tagline: ["Kraft i reserve.", "Straum utan leidning."],
-    url: "/models/battery_holder.glb",
-    scale: 0.8,
-    noBulb: true,
-  },
-  // Atelier (desk scene) hidden for now.
 ];
-
-// Only the first three are shown for now.
-const MODELS: Model[] = ALL_MODELS.slice(0, 3);
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
 
@@ -553,7 +461,7 @@ function Scene({
           a hard, defined shadow onto the ground plane. */}
       {/* Almost no ambient — directional studio lights do the work for a
           high-contrast, realistic look. */}
-      <ambientLight intensity={dark ? 0 : 0.06} />
+      {/* No ambient and no environment map — pure directional studio lights. */}
       <KeyLight az={lightAz} el={lightEl} dark={dark} />
       {/* Fill from the opposite side keeps shadows from going pure black. */}
       <directionalLight
@@ -685,7 +593,21 @@ export default function Viewer() {
   // Chosen background colour (hue) from the hold-drag swatch menu; null follows
   // the per-model hue.
   const [tint, setTint] = useState<number | null>(null);
+  // Slow cinematic intro: black → reveal scene → light turns on → UI fades in.
+  const [intro, setIntro] = useState(true); // black cover on top
+  const [uiIn, setUiIn] = useState(false); // text/icons faded in
   const wheelLock = useRef(false);
+
+  useEffect(() => {
+    const t1 = window.setTimeout(() => setIntro(false), 250); // begin reveal
+    const t2 = window.setTimeout(() => setBulbOn(true), 3200); // light on
+    const t3 = window.setTimeout(() => setUiIn(true), 4200); // UI fades in
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
+  }, []);
 
   // Scroll transition state.
   const [dir, setDir] = useState(1);
@@ -785,7 +707,7 @@ export default function Viewer() {
 
   // Touch: 1 finger orbits, vertical 1-finger swipe navigates; 3 fingers steer
   // the directional light and block both navigation and camera rotation.
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const lightStart = useRef<{
     x: number;
     y: number;
@@ -810,7 +732,7 @@ export default function Viewer() {
       return;
     }
     const t = e.touches[0];
-    touchStart.current = { x: t.clientX, y: t.clientY };
+    touchStart.current = { x: t.clientX, y: t.clientY, t: e.timeStamp };
   };
   const onTouchMove = (e: React.TouchEvent) => {
     if (threeFinger && lightStart.current && e.touches.length >= 3) {
@@ -837,11 +759,17 @@ export default function Viewer() {
     const t = e.changedTouches[0];
     const dx = t.clientX - s.x;
     const dy = t.clientY - s.y;
-    if (Math.abs(dy) > 45 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+    // Vertical and not mostly-horizontal (horizontal is left for orbit).
+    const vertical = Math.abs(dy) > Math.abs(dx) * 1.3;
+    // iOS-style flick: a fast vertical swipe navigates even if it's short.
+    const dt = Math.max(1, e.timeStamp - s.t);
+    const velocity = Math.abs(dy) / dt; // px per ms
+    const flick = velocity > 0.5 && Math.abs(dy) > 16;
+    if (vertical && (Math.abs(dy) > 45 || flick)) {
       if (wheelLock.current) return;
       wheelLock.current = true;
       go(dy < 0 ? 1 : -1);
-      window.setTimeout(() => (wheelLock.current = false), 500);
+      window.setTimeout(() => (wheelLock.current = false), 420);
     }
   };
 
@@ -849,13 +777,17 @@ export default function Viewer() {
   const fg = dark ? "#f4f4f5" : "#1a1a1a";
   const sub = dark ? "#a7a39b" : "#5c5950";
   const muted = dark ? "#54525a" : "#c3c0b6";
-  // Background colour: a chosen swatch (tint) overrides the per-model hue.
-  // Cross-faded with a smooth linear transition. A fixed vignette adds depth.
-  const h = tint ?? model.hue;
-  const baseBg = dark ? `hsl(${h} 26% 6.5%)` : `hsl(${h} 24% 93%)`;
-  const overlay = dark
-    ? "radial-gradient(125% 95% at 60% 36%, rgba(255,240,220,0.06), rgba(0,0,0,0.45) 72%)"
-    : "radial-gradient(125% 95% at 50% 34%, rgba(255,255,255,0.5), rgba(60,55,45,0.07) 72%)";
+  // Background: flat black (or neutral light) by default; a chosen swatch
+  // (tint) from the hold-drag menu can override it. No per-model brown tint.
+  const baseBg =
+    tint != null
+      ? dark
+        ? `hsl(${tint} 26% 6.5%)`
+        : `hsl(${tint} 24% 93%)`
+      : dark
+      ? "#000000"
+      : "#efece4";
+  const overlay = "none";
   const bulbDisabled = !!model.noBulb;
 
   return (
@@ -899,7 +831,7 @@ export default function Viewer() {
       </Canvas>
 
       {/* Top-left: serif model name + tagline */}
-      <div style={heading}>
+      <div style={{ ...heading, ...uiFade(uiIn) }}>
         <h1 style={{ ...title, color: fg }}>{model.title}</h1>
         <p style={{ ...tagline, color: sub }}>
           {model.tagline[0]}
@@ -909,7 +841,7 @@ export default function Viewer() {
       </div>
 
       {/* Top-right: stacked controls */}
-      <div style={corner}>
+      <div style={{ ...corner, ...uiFade(uiIn) }}>
         <button
           aria-label="Slå lampa av/på"
           onClick={() => !bulbDisabled && setBulbOn((v) => !v)}
@@ -978,7 +910,7 @@ export default function Viewer() {
       </div>
 
       {/* Left rail: model dots */}
-      <div style={rail}>
+      <div style={{ ...rail, ...uiFade(uiIn) }}>
         {MODELS.map((m, i) => (
           <button
             key={m.url}
@@ -995,15 +927,34 @@ export default function Viewer() {
           />
         ))}
       </div>
+
+      {/* Slow intro: a black cover that fades away to reveal the scene. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "#000",
+          opacity: intro ? 1 : 0,
+          transition: "opacity 3s ease",
+          pointerEvents: intro ? "auto" : "none",
+          zIndex: 10,
+        }}
+      />
     </main>
   );
+}
+
+/** Fade UI elements in during the intro. */
+function uiFade(visible: boolean): React.CSSProperties {
+  return { opacity: visible ? 1 : 0, transition: "opacity 1.2s ease" };
 }
 
 /* ---------- styles ---------- */
 const heading: React.CSSProperties = {
   position: "absolute",
-  top: "3rem",
-  left: "1.5rem",
+  top: "calc(3rem + env(safe-area-inset-top))",
+  left: "calc(1.5rem + env(safe-area-inset-left))",
   maxWidth: "70vw",
   pointerEvents: "none",
 };
@@ -1023,8 +974,8 @@ const tagline: React.CSSProperties = {
 };
 const corner: React.CSSProperties = {
   position: "absolute",
-  bottom: "2rem",
-  right: "1.5rem",
+  bottom: "calc(2rem + env(safe-area-inset-bottom))",
+  right: "calc(1.5rem + env(safe-area-inset-right))",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -1061,7 +1012,7 @@ const iconBtn: React.CSSProperties = {
 };
 const rail: React.CSSProperties = {
   position: "absolute",
-  left: "1.5rem",
+  left: "calc(1.5rem + env(safe-area-inset-left))",
   top: "50%",
   transform: "translateY(-50%)",
   display: "flex",

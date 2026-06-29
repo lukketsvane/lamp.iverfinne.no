@@ -19,4 +19,9 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  /* App-like: no rubber-band scroll, no pull-to-refresh, no overscroll. */
+  position: fixed;
+  inset: 0;
+  overscroll-behavior: none;
+  touch-action: none;
 }
