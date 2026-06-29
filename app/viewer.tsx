@@ -357,9 +357,14 @@ export default function Viewer() {
     setIndex((i) => Math.min(MODELS.length - 1, Math.max(0, i + dir)));
   }, []);
 
-  // Initialise from system preference; the toggle takes over after that.
+  // Follow the system/device theme dynamically; the manual toggle overrides
+  // until the device preference changes again.
   useEffect(() => {
-    setDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    setDark(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setDark(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   // Keyboard: up/left = prev, down/right = next.
