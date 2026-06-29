@@ -96,7 +96,7 @@ const MODELS: Model[] = [
 MODELS.forEach((m) => useGLTF.preload(m.url));
 
 const WARM = new THREE.Color("#ffcf8a");
-const EXPLODE_SPREAD = 1.6;
+const EXPLODE_SPREAD = 0.4;
 
 // Background colour swatches revealed by holding + dragging the theme toggle.
 const THEME_COLORS: { hue: number; swatch: string }[] = [
@@ -215,7 +215,8 @@ function ActiveModel({
   const prog = useRef(0); // transition progress 0..1
   const exitDone = useRef(false);
 
-  const { root, parts, lensMats, woodMats, groundY, lightPos } = useMemo(() => {
+  const { root, parts, lensMats, woodMats, groundY, lightPos, maxDim } =
+    useMemo(() => {
     const clone = scene.clone(true);
 
     // Collapse an exploded assembly back together: zero the lateral (X/Z)
@@ -338,7 +339,7 @@ function ActiveModel({
     wrap.scale.setScalar(s);
     // Bottom of the (centered) model after scaling — the ground line.
     const groundY = -(size.y * s) / 2;
-    return { root: wrap, parts, lensMats, woodMats, groundY, lightPos };
+    return { root: wrap, parts, lensMats, woodMats, groundY, lightPos, maxDim };
   }, [scene, scale, lensNames, matte, assemble]);
 
   // Re-tint the wood whenever the chosen finish changes (no model rebuild).
@@ -358,7 +359,7 @@ function ActiveModel({
     for (const p of parts) {
       p.obj.position
         .copy(p.orig)
-        .addScaledVector(p.dir, factor.current * EXPLODE_SPREAD);
+        .addScaledVector(p.dir, factor.current * EXPLODE_SPREAD * maxDim);
     }
     for (const m of lensMats) m.emissiveIntensity = glow.current * 1.25;
     if (lightRef.current) lightRef.current.intensity = glow.current * 3;
@@ -640,8 +641,7 @@ export default function Viewer() {
   const [bulbOn, setBulbOn] = useState(false);
   // Chosen wood finish ("Vel uttrykk").
   const [finish, setFinish] = useState(0);
-  // Exploded view is temporarily disabled (button greyed out).
-  const exploded = false;
+  const [exploded, setExploded] = useState(false);
   // Theme: 'auto' follows the device, otherwise an explicit choice. Tap the
   // toggle to flip light/dark; press-and-hold then drag for the full menu.
   const [themeMode, setThemeMode] = useState<"auto" | "light" | "dark">("auto");
@@ -928,17 +928,19 @@ export default function Viewer() {
           <Icon.Bulb on={bulbOn && !bulbDisabled} />
         </button>
         <button
-          aria-label="Exploded view (utilgjengeleg)"
-          disabled
-          title="Kjem snart"
+          aria-label="Exploded view"
+          aria-pressed={exploded}
+          onClick={() => setExploded((v) => !v)}
           style={{
             ...iconBtn,
-            color: muted,
-            opacity: 0.4,
-            cursor: "default",
+            color: fg,
+            cursor: "pointer",
+            filter: exploded
+              ? "drop-shadow(0 0 9px rgba(255,255,255,0.4))"
+              : "none",
           }}
         >
-          <Icon.Layers on={false} />
+          <Icon.Layers on={exploded} />
         </button>
         <div style={{ position: "relative", display: "flex" }}>
           {/* Hold-and-drag colour menu opens to the left of the toggle. */}
