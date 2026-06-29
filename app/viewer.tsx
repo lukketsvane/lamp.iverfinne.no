@@ -9,11 +9,21 @@ import {
   useState,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, ContactShadows } from "@react-three/drei";
+import {
+  OrbitControls,
+  useGLTF,
+  ContactShadows,
+  Environment,
+  Lightformer,
+} from "@react-three/drei";
 import * as THREE from "three";
 
 type Model = {
   name: string;
+  /** Display name (serif heading). */
+  title: string;
+  /** Two-line tagline shown under the title. */
+  tagline: [string, string];
   url: string;
   scale?: number;
   camera?: [number, number, number];
@@ -32,19 +42,58 @@ function polarOf([x, y, z]: [number, number, number]) {
 }
 
 const MODELS: Model[] = [
-  { name: "Lamp 01", url: "/models/lamp_01.glb" },
+  // part_5 is the thin front panel that sits mid-body — the lit diffuser.
+  {
+    name: "Lamp 01",
+    title: "Lume",
+    tagline: ["Quiet warmth.", "A glow that settles in."],
+    url: "/models/lamp_01.glb",
+    lens: ["tripo_part_5_material"],
+  },
   // The oval frosted face is the lens (confirmed via part segmentation).
-  { name: "Lamp 02", url: "/models/lamp_02.glb", lens: ["tripo_part_4_material"] },
-  { name: "Lamp 03", url: "/models/lamp_03.glb", scale: 0.8 },
+  {
+    name: "Lamp 02",
+    title: "Aure",
+    tagline: ["Ambient mode.", "Soft light for evening rooms."],
+    url: "/models/lamp_02.glb",
+    lens: ["tripo_part_4_material"],
+  },
+  {
+    name: "Lamp 03",
+    title: "Lune",
+    tagline: ["Soft light.", "Grounded form."],
+    url: "/models/lamp_03.glb",
+    scale: 0.8,
+  },
   // part_0 = wooden shade disc, part_1 = wooden column; part_2 is the
   // diffuser sitting under the shade — the light source.
-  { name: "Lamp 04", url: "/models/lamp_04.glb", lens: ["tripo_part_2_material"] },
-  { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
+  {
+    name: "Lamp 04",
+    title: "Sol",
+    tagline: ["Warm cast.", "Wood, lit from within."],
+    url: "/models/lamp_04.glb",
+    lens: ["tripo_part_2_material"],
+  },
+  {
+    name: "Clamp Lamp",
+    title: "Pivot",
+    tagline: ["Task light.", "Aimed where you need it."],
+    url: "/models/clamp_lamp_01.glb",
+  },
   // Real micro:bit is only ~45x55 mm; it's not a lamp, so no bulb.
-  { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32, noBulb: true },
+  {
+    name: "micro:bit",
+    title: "Pixel",
+    tagline: ["Tiny machine.", "Not a lamp — but it glows."],
+    url: "/models/microbit_2.glb",
+    scale: 0.32,
+    noBulb: true,
+  },
   // Desk scene last; reads best from an elevated 3/4 top-down angle.
   {
     name: "Desk Lamp",
+    title: "Atelier",
+    tagline: ["Work mode.", "A desk, well lit."],
     url: "/models/desk_lamp_scene.glb",
     scale: 0.9,
     camera: [1.5, 3.2, 6],
@@ -112,6 +161,7 @@ function ActiveModel({
 }) {
   const { scene } = useGLTF(url);
   const lightRef = useRef<THREE.PointLight>(null);
+  const spillRef = useRef<THREE.PointLight>(null);
   const factor = useRef(0);
   const glow = useRef(0);
 
@@ -138,16 +188,23 @@ function ActiveModel({
     clone.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       const arr = Array.isArray(mesh.material);
       const mats = (arr ? mesh.material : [mesh.material]) as THREE.Material[];
       const cloned = mats.filter(Boolean).map((m) => {
         const c = m.clone() as THREE.MeshStandardMaterial;
         const isLens =
           lensMeshes.has(mesh) || matchName(c.name) || matchName(mesh.name);
-        if (c.isMeshStandardMaterial && isLens) {
-          c.emissive = WARM.clone();
-          c.emissiveIntensity = 0;
-          lensMats.push(c);
+        if (c.isMeshStandardMaterial) {
+          // Subtle environment pickup makes the wood/metal read as real.
+          c.envMapIntensity = 0.8;
+          if (isLens) {
+            c.emissive = WARM.clone();
+            c.emissiveIntensity = 0;
+            c.toneMapped = false; // let the lit panel bloom past white
+            lensMats.push(c);
+          }
         }
         return c;
       });
@@ -189,27 +246,39 @@ function ActiveModel({
         .copy(p.orig)
         .addScaledVector(p.dir, factor.current * EXPLODE_SPREAD);
     }
-    for (const m of lensMats) m.emissiveIntensity = glow.current * 2.4;
-    if (lightRef.current) lightRef.current.intensity = glow.current * 7;
+    for (const m of lensMats) m.emissiveIntensity = glow.current * 3.2;
+    if (lightRef.current) lightRef.current.intensity = glow.current * 9;
+    if (spillRef.current) spillRef.current.intensity = glow.current * 4;
   });
 
   return (
     <group>
       <primitive object={root} />
+      {/* Core glow from inside the fixture. */}
       <pointLight
         ref={lightRef}
-        position={[0, 0.4, 0]}
+        position={[0, 0.3, 0.4]}
         color={WARM}
         distance={9}
         decay={2}
         intensity={0}
       />
+      {/* Wider warm spill that washes the surrounding scene when lit. */}
+      <pointLight
+        ref={spillRef}
+        position={[0, 0.6, 2]}
+        color={WARM}
+        distance={16}
+        decay={2}
+        intensity={0}
+      />
       <ContactShadows
         position={[0, groundY, 0]}
-        opacity={dark ? 0.12 : 0.35}
-        scale={10}
-        blur={2.6}
-        far={4}
+        opacity={dark ? 0.55 : 0.32}
+        color={dark ? "#000000" : "#3a3328"}
+        scale={11}
+        blur={3}
+        far={4.5}
       />
     </group>
   );
@@ -248,13 +317,35 @@ function Scene({
   const polar = polarOf(cam);
   return (
     <>
-      <ambientLight intensity={dark ? 0.12 : 0.7} />
-      <hemisphereLight
-        intensity={dark ? 0.1 : 0.6}
-        groundColor={dark ? "#000000" : "#d8d4c8"}
+      <ambientLight intensity={dark ? 0.14 : 0.42} />
+      {/* In-scene image-based lighting (no HDR download) for soft, real
+          reflections on the wood and metal. */}
+      <Environment resolution={256} frames={1}>
+        <Lightformer
+          intensity={dark ? 0.7 : 1.7}
+          position={[0, 2.5, 3]}
+          scale={[9, 9, 1]}
+          color={dark ? "#352a1f" : "#fff6ea"}
+        />
+        <Lightformer
+          intensity={dark ? 0.3 : 0.8}
+          position={[-4, 1, -2]}
+          scale={[6, 6, 1]}
+          color={dark ? "#1b2230" : "#d4dae4"}
+        />
+        <Lightformer
+          intensity={dark ? 0.25 : 0.6}
+          position={[4, 0, -3]}
+          scale={[6, 6, 1]}
+          color={dark ? "#2a2018" : "#ffe7c2"}
+        />
+      </Environment>
+      <directionalLight
+        position={[4, 7, 5]}
+        intensity={dark ? 0.35 : 1.7}
+        color={dark ? "#ffd9a8" : "#ffffff"}
       />
-      <directionalLight position={[5, 8, 6]} intensity={dark ? 0.2 : 1.6} />
-      <directionalLight position={[-6, 4, -4]} intensity={dark ? 0.05 : 0.6} />
+      <directionalLight position={[-6, 3, -4]} intensity={dark ? 0.12 : 0.5} />
 
       <Suspense fallback={null}>
         <ActiveModel
@@ -283,14 +374,15 @@ function Scene({
   );
 }
 
-/* ---------- Icons ---------- */
+/* ---------- Icons (outline hybrid, ~1.7pt stroke) ---------- */
+const STROKE = 1.7;
 const Icon = {
   Bulb: ({ on }: { on: boolean }) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       <path
         d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.5.4.9 1 1 1.6l.1.5h4.8l.1-.5c.1-.6.5-1.2 1-1.6A6 6 0 0 0 12 3Z"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth={STROKE}
         strokeLinecap="round"
         strokeLinejoin="round"
         fill={on ? WARM.getStyle() : "none"}
@@ -302,7 +394,7 @@ const Icon = {
       <path
         d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5M3 17.5 12 22l9-4.5"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth={STROKE}
         strokeLinecap="round"
         strokeLinejoin="round"
         fill={on ? "currentColor" : "none"}
@@ -310,38 +402,11 @@ const Icon = {
       />
     </svg>
   ),
-  Theme: ({ dark }: { dark: boolean }) =>
-    dark ? (
-      // Sun (click to go light)
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
-        <path
-          d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-      </svg>
-    ) : (
-      // Moon (click to go dark)
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  Chevron: ({ dir }: { dir: "up" | "down" }) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path
-        d={dir === "up" ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"}
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+  // Contrast / half-filled disc — the theme toggle in the reference.
+  Theme: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={STROKE} />
+      <path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" />
     </svg>
   ),
 };
@@ -349,7 +414,8 @@ const Icon = {
 export default function Viewer() {
   const [index, setIndex] = useState(0);
   const [bulbOn, setBulbOn] = useState(false);
-  const [exploded, setExploded] = useState(false);
+  // Exploded view is temporarily disabled (button greyed out).
+  const exploded = false;
   const [dark, setDark] = useState(false);
   const wheelLock = useRef(false);
 
@@ -406,11 +472,14 @@ export default function Viewer() {
     }
   };
 
+  const model = MODELS[index];
   const fg = dark ? "#f4f4f5" : "#1a1a1a";
-  const muted = dark ? "#6b6b70" : "#b9b6ac";
-  const bg = dark ? "#0a0a0b" : "#f0efe9";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const bulbDisabled = !!MODELS[index].noBulb;
+  const sub = dark ? "#a7a39b" : "#5c5950";
+  const muted = dark ? "#54525a" : "#c3c0b6";
+  const bg = dark
+    ? "radial-gradient(120% 90% at 62% 38%, #1c1814 0%, #0c0b0d 55%, #070608 100%)"
+    : "radial-gradient(120% 90% at 50% 34%, #faf9f5 0%, #efece4 60%, #e6e3d9 100%)";
+  const bulbDisabled = !!model.noBulb;
 
   return (
     <main
@@ -423,27 +492,34 @@ export default function Viewer() {
         position: "relative",
         background: bg,
         color: fg,
-        transition: "background 0.5s ease, color 0.5s ease",
+        transition: "background 0.6s ease, color 0.5s ease",
       }}
     >
       <Canvas
         dpr={[1, 2]}
+        shadows
         camera={{ position: [0, 0, 6], fov: 40 }}
-        gl={{ preserveDrawingBuffer: true, antialias: true }}
+        gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }}
+        onCreated={({ gl }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.05;
+        }}
       >
-        <color attach="background" args={[bg]} />
         <Scene index={index} exploded={exploded} bulbOn={bulbOn} dark={dark} />
       </Canvas>
 
-      {/* Top-right: icons stacked above the counter */}
+      {/* Top-left: serif model name + tagline */}
+      <div style={heading}>
+        <h1 style={{ ...title, color: fg }}>{model.title}</h1>
+        <p style={{ ...tagline, color: sub }}>
+          {model.tagline[0]}
+          <br />
+          {model.tagline[1]}
+        </p>
+      </div>
+
+      {/* Top-right: stacked controls */}
       <div style={corner}>
-        <button
-          aria-label="Lyst/mørkt tema"
-          onClick={() => setDark((v) => !v)}
-          style={{ ...iconBtn, color: fg }}
-        >
-          <Icon.Theme dark={dark} />
-        </button>
         <button
           aria-label="Slå lampa av/på"
           onClick={() => !bulbDisabled && setBulbOn((v) => !v)}
@@ -462,77 +538,79 @@ export default function Viewer() {
           <Icon.Bulb on={bulbOn && !bulbDisabled} />
         </button>
         <button
-          aria-label="Exploded view"
-          onClick={() => setExploded((v) => !v)}
-          style={{ ...iconBtn, color: fg, opacity: exploded ? 1 : 0.7 }}
+          aria-label="Exploded view (utilgjengeleg)"
+          disabled
+          title="Kjem snart"
+          style={{
+            ...iconBtn,
+            color: muted,
+            opacity: 0.4,
+            cursor: "default",
+          }}
         >
-          <Icon.Layers on={exploded} />
+          <Icon.Layers on={false} />
         </button>
-        <span style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>
-          {pad(index + 1)} <span style={{ color: muted }}>/ {pad(MODELS.length)}</span>
-        </span>
+        <button
+          aria-label="Lyst/mørkt tema"
+          onClick={() => setDark((v) => !v)}
+          style={{ ...iconBtn, color: fg }}
+        >
+          <Icon.Theme />
+        </button>
       </div>
 
-      {/* Large wordmark */}
-      <span style={wordmark}>lamp</span>
-
-      {/* Right-side pager */}
-      <div style={pager}>
-        <button
-          aria-label="Førre"
-          onClick={() => go(-1)}
-          disabled={index === 0}
-          style={{ ...pagerBtn, color: fg, opacity: index === 0 ? 0.25 : 0.8 }}
-        >
-          <Icon.Chevron dir="up" />
-        </button>
+      {/* Left rail: model dots */}
+      <div style={rail}>
         {MODELS.map((m, i) => (
           <button
             key={m.url}
-            aria-label={m.name}
+            aria-label={m.title}
+            aria-current={i === index}
             onClick={() => setIndex(i)}
             style={{
               ...dot,
-              background: i === index ? fg : "transparent",
-              borderColor: i === index ? fg : muted,
+              width: i === index ? 9 : 7,
+              height: i === index ? 9 : 7,
+              background: i === index ? fg : muted,
+              opacity: i === index ? 1 : 0.7,
             }}
           />
         ))}
-        <button
-          aria-label="Neste"
-          onClick={() => go(1)}
-          disabled={index === MODELS.length - 1}
-          style={{
-            ...pagerBtn,
-            color: fg,
-            opacity: index === MODELS.length - 1 ? 0.25 : 0.8,
-          }}
-        >
-          <Icon.Chevron dir="down" />
-        </button>
       </div>
     </main>
   );
 }
 
 /* ---------- styles ---------- */
+const heading: React.CSSProperties = {
+  position: "absolute",
+  top: "3rem",
+  left: "1.5rem",
+  maxWidth: "70vw",
+  pointerEvents: "none",
+};
+const title: React.CSSProperties = {
+  fontFamily: "var(--font-serif), Georgia, 'Times New Roman', serif",
+  fontWeight: 500,
+  fontSize: "clamp(46px, 16vw, 84px)",
+  lineHeight: 0.95,
+  letterSpacing: "-0.01em",
+};
+const tagline: React.CSSProperties = {
+  marginTop: "0.85rem",
+  fontSize: "clamp(15px, 4.6vw, 19px)",
+  fontWeight: 400,
+  lineHeight: 1.35,
+  letterSpacing: "0.01em",
+};
 const corner: React.CSSProperties = {
   position: "absolute",
   top: "1.5rem",
   right: "1.5rem",
   display: "flex",
   flexDirection: "column",
-  alignItems: "flex-end",
-  gap: 14,
-};
-const wordmark: React.CSSProperties = {
-  position: "absolute",
-  top: "3.5rem",
-  left: "1.5rem",
-  fontSize: "clamp(40px, 13vw, 72px)",
-  fontWeight: 700,
-  letterSpacing: "-0.03em",
-  lineHeight: 1,
+  alignItems: "center",
+  gap: 20,
 };
 const iconBtn: React.CSSProperties = {
   background: "none",
@@ -542,29 +620,20 @@ const iconBtn: React.CSSProperties = {
   display: "flex",
   transition: "filter 0.4s ease, opacity 0.3s ease",
 };
-const pager: React.CSSProperties = {
+const rail: React.CSSProperties = {
   position: "absolute",
-  right: 16,
+  left: "1.5rem",
   top: "50%",
   transform: "translateY(-50%)",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
-  gap: 12,
+  gap: 14,
 };
-const pagerBtn: React.CSSProperties = {
-  background: "none",
+const dot: React.CSSProperties = {
+  borderRadius: "50%",
   border: "none",
   cursor: "pointer",
   padding: 0,
-  display: "flex",
-};
-const dot: React.CSSProperties = {
-  width: 9,
-  height: 9,
-  borderRadius: "50%",
-  border: "1.5px solid",
-  cursor: "pointer",
-  padding: 0,
-  transition: "background 0.25s ease, border-color 0.25s ease",
+  transition: "background 0.25s ease, opacity 0.25s ease, width 0.2s ease, height 0.2s ease",
 };
