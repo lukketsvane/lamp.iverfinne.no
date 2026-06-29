@@ -21,6 +21,14 @@ type Model = {
   tagline: [string, string];
   /** Longer descriptive paragraph for the hero (falls back to the tagline). */
   blurb?: string;
+  /** Spec sheet shown in the "Mål og detaljar" details overlay. */
+  specs?: {
+    height: string;
+    width: string;
+    diameter?: string;
+    material: string;
+    light: string;
+  };
   url: string;
   scale?: number;
   /** Extra vertical nudge (world units) for per-model framing. */
@@ -60,6 +68,13 @@ const MODELS: Model[] = [
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
     blurb:
       "Eit ljos som skapar ro. Varmt, dimbart lys og naturleg eik – opplyst frå innsida, forma for kvardagslege ritual.",
+    specs: {
+      height: "240 mm",
+      width: "280 mm",
+      diameter: "ø60 mm",
+      material: "Massiv eik, sandblåst og olja",
+      light: "Integrert LED 1800–3000K",
+    },
     url: "/models/mysa.glb",
     scale: 0.82,
     lens: ["tripo_part_2_material"],
@@ -699,6 +714,58 @@ const Icon = {
       />
     </svg>
   ),
+  Back: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M20 12H5m6-6-6 6 6 6"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+  Height: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 4v16M8 7l4-3 4 3M8 17l4 3 4-3"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+  Width: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 12h16M7 8l-3 4 3 4M17 8l3 4-3 4"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+  Material: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <rect
+        x="4"
+        y="4"
+        width="16"
+        height="16"
+        rx="3"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+      />
+      <path
+        d="M6 10c3 1 9 1 12 0M6 14c3 1 9 1 12 0"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
 };
 
 export default function Viewer() {
@@ -716,6 +783,8 @@ export default function Viewer() {
   // Chosen background colour (hue) from the hold-drag swatch menu; null follows
   // the per-model hue.
   const [tint, setTint] = useState<number | null>(null);
+  // "Mål og detaljar" spec overlay.
+  const [details, setDetails] = useState(false);
   const wheelLock = useRef(false);
 
   // Scroll transition state.
@@ -980,15 +1049,16 @@ export default function Viewer() {
           <Icon.Bulb on={bulbOn && !bulbDisabled} />
         </button>
         <button
-          aria-label="Exploded view (utilgjengeleg)"
-          disabled
-          title="Kjem snart"
+          aria-label="Mål og detaljar"
+          onClick={() => model.specs && setDetails(true)}
+          disabled={!model.specs}
           style={{
             ...iconChip,
             background: chipBg,
-            color: muted,
-            opacity: 0.45,
-            cursor: "default",
+            color: fg,
+            opacity: model.specs ? 1 : 0.45,
+            cursor: model.specs ? "pointer" : "default",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
           }}
         >
           <Icon.Layers on={false} />
@@ -1074,6 +1144,84 @@ export default function Viewer() {
           </div>
         ))}
       </div>
+
+      {/* "Mål og detaljar" spec overlay */}
+      {details && model.specs && (
+        <div
+          style={{
+            ...detailsOverlay,
+            backgroundColor: baseBg,
+            backgroundImage: overlay,
+            color: fg,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              aria-label="Tilbake"
+              onClick={() => setDetails(false)}
+              style={{
+                ...iconChip,
+                background: chipBg,
+                color: fg,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              }}
+            >
+              <Icon.Back />
+            </button>
+          </div>
+          <div style={{ ...eyebrow, color: accent, marginTop: "0.5rem" }}>
+            NYHET
+          </div>
+          <h1
+            style={{
+              ...title,
+              color: fg,
+              fontSize: "clamp(34px, 12vw, 58px)",
+            }}
+          >
+            Mål og detaljar
+          </h1>
+          <p style={{ ...blurbText, color: sub, marginTop: "0.9rem" }}>
+            Gjennomtenkt form og materiale. Ljos som varer – skapt for
+            kvardagslege ritual.
+          </p>
+          <div style={specGrid}>
+            {(
+              [
+                [<Icon.Height key="h" />, "Høgd", model.specs.height],
+                [<Icon.Width key="w" />, "Breidd", model.specs.width],
+                [<Icon.Material key="m" />, "Materiale", model.specs.material],
+                [<Icon.Sun key="l" />, "Lyskjelde", model.specs.light],
+              ] as const
+            ).map(([icon, label, value]) => (
+              <div
+                key={label}
+                style={{ ...specCard, background: chipBg, borderColor: muted }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ color: accent, display: "flex" }}>{icon}</span>
+                  <span style={{ fontSize: 17, fontWeight: 600 }}>{label}</span>
+                </div>
+                <div style={{ marginTop: 10, fontSize: 15, color: sub }}>
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ ...specNote, color: sub }}>
+            <span
+              style={{
+                ...specNoteDot,
+                borderColor: muted,
+                color: sub,
+              }}
+            >
+              i
+            </span>
+            Små variasjonar kan førekomme grunna naturlege materiale.
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -1193,6 +1341,51 @@ const featureDivide: React.CSSProperties = {
   width: 1,
   height: "70%",
   opacity: 0.3,
+};
+const detailsOverlay: React.CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  zIndex: 5,
+  padding: "1.5rem 1.5rem 2rem",
+  overflowY: "auto",
+  display: "flex",
+  flexDirection: "column",
+};
+const specGrid: React.CSSProperties = {
+  marginTop: "1.8rem",
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 12,
+};
+const specCard: React.CSSProperties = {
+  borderRadius: 16,
+  padding: "1.1rem",
+  border: "1px solid",
+  borderColor: "transparent",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
+  minHeight: 104,
+};
+const specNote: React.CSSProperties = {
+  marginTop: "auto",
+  paddingTop: "1.6rem",
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  fontSize: 13,
+};
+const specNoteDot: React.CSSProperties = {
+  flexShrink: 0,
+  width: 20,
+  height: 20,
+  borderRadius: "50%",
+  border: "1.4px solid",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 11,
+  fontStyle: "italic",
+  fontFamily: "var(--font-serif), Georgia, serif",
 };
 const themeMenuRow: React.CSSProperties = {
   position: "absolute",
