@@ -16,6 +16,7 @@ import {
   Environment,
   Lightformer,
 } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 
 type Model = {
@@ -42,37 +43,38 @@ function polarOf([x, y, z]: [number, number, number]) {
 }
 
 const MODELS: Model[] = [
+  // Mysa (was lamp_04): part_0 = wooden shade disc, part_1 = column; part_2 is
+  // the diffuser sitting under the shade — the light source.
+  {
+    name: "Mysa",
+    title: "Mysa",
+    tagline: ["Warm cast.", "Wood, lit from within."],
+    url: "/models/mysa.glb",
+    lens: ["tripo_part_2_material"],
+  },
+  // Aure (was lamp_03): lens found geometrically.
+  {
+    name: "Aure",
+    title: "Aure",
+    tagline: ["Ambient mode.", "Soft light for evening rooms."],
+    url: "/models/aure.glb",
+    scale: 0.8,
+  },
+  // Lume (was lamp_02): the oval frosted face is the lens (part_4).
+  {
+    name: "Lume",
+    title: "Lume",
+    tagline: ["Soft light.", "An even, frosted glow."],
+    url: "/models/lume.glb",
+    lens: ["tripo_part_4_material"],
+  },
   // part_5 is the thin front panel that sits mid-body — the lit diffuser.
   {
     name: "Lamp 01",
-    title: "Lume",
+    title: "Glo",
     tagline: ["Quiet warmth.", "A glow that settles in."],
     url: "/models/lamp_01.glb",
     lens: ["tripo_part_5_material"],
-  },
-  // The oval frosted face is the lens (confirmed via part segmentation).
-  {
-    name: "Lamp 02",
-    title: "Aure",
-    tagline: ["Ambient mode.", "Soft light for evening rooms."],
-    url: "/models/lamp_02.glb",
-    lens: ["tripo_part_4_material"],
-  },
-  {
-    name: "Lamp 03",
-    title: "Lune",
-    tagline: ["Soft light.", "Grounded form."],
-    url: "/models/lamp_03.glb",
-    scale: 0.8,
-  },
-  // part_0 = wooden shade disc, part_1 = wooden column; part_2 is the
-  // diffuser sitting under the shade — the light source.
-  {
-    name: "Lamp 04",
-    title: "Sol",
-    tagline: ["Warm cast.", "Wood, lit from within."],
-    url: "/models/lamp_04.glb",
-    lens: ["tripo_part_2_material"],
   },
   {
     name: "Clamp Lamp",
@@ -80,25 +82,9 @@ const MODELS: Model[] = [
     tagline: ["Task light.", "Aimed where you need it."],
     url: "/models/clamp_lamp_01.glb",
   },
-  // Real micro:bit is only ~45x55 mm; it's not a lamp, so no bulb.
-  {
-    name: "micro:bit",
-    title: "Pixel",
-    tagline: ["Tiny machine.", "Not a lamp — but it glows."],
-    url: "/models/microbit_2.glb",
-    scale: 0.32,
-    noBulb: true,
-  },
-  // Desk scene last; reads best from an elevated 3/4 top-down angle.
-  {
-    name: "Desk Lamp",
-    title: "Atelier",
-    tagline: ["Work mode.", "A desk, well lit."],
-    url: "/models/desk_lamp_scene.glb",
-    scale: 0.9,
-    camera: [1.5, 3.2, 6],
-    noBulb: true, // a whole desk scene — no single light fixture
-  },
+  // Hidden for now:
+  // micro:bit — not a lamp.
+  // Desk Lamp — a whole desk scene, no single fixture.
 ];
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
@@ -370,6 +356,17 @@ function Scene({
         maxPolarAngle={polar}
       />
       <CameraRig pos={cam} />
+
+      {/* Glow atmosphere: the emissive lens (toneMapped:false) blooms when lit. */}
+      <EffectComposer>
+        <Bloom
+          mipmapBlur
+          intensity={dark ? 1.6 : 0.9}
+          luminanceThreshold={1.0}
+          luminanceSmoothing={0.2}
+          radius={0.7}
+        />
+      </EffectComposer>
     </>
   );
 }
