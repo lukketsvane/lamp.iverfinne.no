@@ -25,6 +25,14 @@ type Model = {
   offsetY?: number;
   /** Extra horizontal nudge (world units) for per-model framing. */
   offsetX?: number;
+  /** Resting Y-rotation (radians) so the model's front faces the user on load. */
+  yaw?: number;
+  /** Hide the ground shadow plane (floating / clamp fixtures). */
+  noGround?: boolean;
+  /** Background hue (0–360) — smoothly cross-faded between models. */
+  hue: number;
+  /** Force a fully matte finish (roughness 1, no metalness/sheen). */
+  matte?: boolean;
   camera?: [number, number, number];
   /** Explicit lens material-name substrings (overrides auto-detection). */
   lens?: string[];
@@ -46,6 +54,7 @@ const MODELS: Model[] = [
   {
     name: "Ljomveg",
     title: "Ljomveg",
+    hue: 32,
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
     url: "/models/mysa.glb",
     scale: 0.82,
@@ -57,9 +66,12 @@ const MODELS: Model[] = [
   {
     name: "Lemljos",
     title: "Lemljos",
+    hue: 28,
     tagline: ["Dempa modus.", "Mjukt ljos for kveldsrom."],
     url: "/models/aure.glb",
-    scale: 0.82,
+    scale: 0.57, // 30% smaller
+    matte: true, // matte wood, not shiny
+    yaw: Math.PI / 2, // turn a frosted panel toward the viewer on load
     lens: [
       "tripo_part_2_material",
       "tripo_part_4_material",
@@ -71,6 +83,7 @@ const MODELS: Model[] = [
   {
     name: "Kultist",
     title: "Kultist",
+    hue: 210,
     tagline: ["Mjukt ljos.", "Eit jamt, matt skin."],
     url: "/models/kultist.glb",
     scale: 0.86,
@@ -79,17 +92,21 @@ const MODELS: Model[] = [
   {
     name: "Clamp Lamp",
     title: "Pivot",
+    hue: 150,
     tagline: ["Arbeidslys.", "Retta dit du treng det."],
     url: "/models/clamp_lamp_01.glb",
-    scale: 0.86,
+    scale: 1.12, // 30% larger
+    noGround: true, // clamps onto an edge — no floor beneath it
   },
   // Flower-shaped clamp lamp; part_7 is the round diffuser disc.
   {
     name: "Clamp Lamp 02",
     title: "Blome",
+    hue: 350,
     tagline: ["Klypelys.", "Ein blome som lyser."],
     url: "/models/clamp_lamp_02.glb",
-    scale: 0.86,
+    scale: 1.12, // 30% larger
+    noGround: true,
     lens: ["tripo_part_7_material"],
   },
   // Stand lamp: no frosted diffuser of its own — part_3 (the shade body) is
@@ -97,6 +114,7 @@ const MODELS: Model[] = [
   {
     name: "Stand Lamp",
     title: "Søyle",
+    hue: 42,
     tagline: ["Ståande ljos.", "Roleg i eit hjørne."],
     url: "/models/stand_lamp_01.glb",
     scale: 0.86,
@@ -106,9 +124,11 @@ const MODELS: Model[] = [
   {
     name: "Lamp 5",
     title: "Lykt",
+    hue: 45,
     tagline: ["Bera ljoset.", "Ei lykt for natta."],
     url: "/models/lamp_5.glb",
     scale: 0.86,
+    offsetX: -0.18, // re-centre — its origin sits off to one side
     lens: ["tripo_part_5_material"],
   },
   // Glo (was lamp_01): part_5 is the thin front panel mid-body — the diffuser.
@@ -116,30 +136,26 @@ const MODELS: Model[] = [
   {
     name: "Lamp 01",
     title: "Glo",
+    hue: 50,
     tagline: ["Roleg varme.", "Eit skin som legg seg."],
     url: "/models/lamp_01.glb",
     scale: 0.9,
     lens: ["tripo_part_5_material"],
   },
-  // Real micro:bit is tiny; it's not a lamp, so no bulb.
+  // Real micro:bit is tiny; it's not a lamp, so no bulb. Floats centred in the
+  // viewport with no ground plane.
   {
     name: "micro:bit",
     title: "micro:bit",
+    hue: 215,
     tagline: ["Lita maskin.", "Ikkje ei lampe i det heile."],
     url: "/models/microbit_2.glb",
     scale: 0.3,
+    offsetY: 0.5, // cancel the standard drop so it sits dead-centre
+    noGround: true,
     noBulb: true,
   },
-  // Desk scene; reads best from an elevated 3/4 angle.
-  {
-    name: "Desk Lamp",
-    title: "Atelier",
-    tagline: ["Arbeidsmodus.", "Eit heilt skrivebord."],
-    url: "/models/desk_lamp_scene.glb",
-    scale: 0.82,
-    camera: [1.5, 3.2, 6],
-    noBulb: true,
-  },
+  // Atelier (desk scene) hidden for now.
 ];
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
@@ -197,6 +213,9 @@ function ActiveModel({
   scale = 1,
   offsetY = 0,
   offsetX = 0,
+  yaw = 0,
+  noGround = false,
+  matte = false,
   exploded,
   bulbOn,
   lensNames,
@@ -209,6 +228,9 @@ function ActiveModel({
   scale?: number;
   offsetY?: number;
   offsetX?: number;
+  yaw?: number;
+  noGround?: boolean;
+  matte?: boolean;
   exploded: boolean;
   bulbOn: boolean;
   lensNames?: string[];
@@ -228,7 +250,7 @@ function ActiveModel({
   const prog = useRef(0); // transition progress 0..1
   const exitDone = useRef(false);
 
-  const { root, parts, lensMats, groundY } = useMemo(() => {
+  const { root, parts, lensMats, groundY, lightPos } = useMemo(() => {
     const clone = scene.clone(true);
     clone.updateMatrixWorld(true);
 
@@ -248,6 +270,7 @@ function ActiveModel({
     // Clone materials so emissive tweaks don't leak into the cached GLTF,
     // and mark the lens materials emissive.
     const lensMats: THREE.MeshStandardMaterial[] = [];
+    const lensObjs: THREE.Mesh[] = [];
     clone.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
@@ -255,6 +278,7 @@ function ActiveModel({
       mesh.receiveShadow = true;
       const arr = Array.isArray(mesh.material);
       const mats = (arr ? mesh.material : [mesh.material]) as THREE.Material[];
+      let meshIsLens = false;
       const cloned = mats.filter(Boolean).map((m) => {
         const c = m.clone() as THREE.MeshStandardMaterial;
         const isLens =
@@ -264,14 +288,21 @@ function ActiveModel({
           c.emissiveIntensity = 0;
           c.toneMapped = false; // let the lit panel bloom past white
           lensMats.push(c);
+          meshIsLens = true;
+        }
+        if (matte && c.isMeshStandardMaterial) {
+          c.roughness = 1;
+          c.metalness = 0;
         }
         return c;
       });
+      if (meshIsLens) lensObjs.push(mesh);
       mesh.material = arr ? cloned : cloned[0];
     });
 
     // Center the model at the origin.
     clone.position.sub(center);
+    clone.updateMatrixWorld(true);
 
     // Record explode directions for each top-level part.
     const modelCenter = new THREE.Vector3(0, 0, 0);
@@ -287,13 +318,28 @@ function ActiveModel({
 
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     const s = (2.4 * scale) / maxDim;
+
+    // Place the interior light at the centre of the lit diffuser so the glow
+    // comes from inside the shade — not a stray hotspot in the base.
+    const lightLocal = new THREE.Vector3(0, size.y * 0.12, 0);
+    if (lensObjs.length) {
+      const lb = new THREE.Box3();
+      for (const o of lensObjs) lb.expandByObject(o);
+      if (!lb.isEmpty()) lb.getCenter(lightLocal);
+    }
+    const lightPos: [number, number, number] = [
+      lightLocal.x * s,
+      lightLocal.y * s,
+      lightLocal.z * s,
+    ];
+
     const wrap = new THREE.Group();
     wrap.add(clone);
     wrap.scale.setScalar(s);
     // Bottom of the (centered) model after scaling — the ground line.
     const groundY = -(size.y * s) / 2;
-    return { root: wrap, parts, lensMats, groundY };
-  }, [scene, scale, lensNames]);
+    return { root: wrap, parts, lensMats, groundY, lightPos };
+  }, [scene, scale, lensNames, matte]);
 
   useFrame((_, dt) => {
     const k = Math.min(1, dt * 5);
@@ -305,11 +351,11 @@ function ActiveModel({
         .copy(p.orig)
         .addScaledVector(p.dir, factor.current * EXPLODE_SPREAD);
     }
-    for (const m of lensMats) m.emissiveIntensity = glow.current * 3.2;
-    if (lightRef.current) lightRef.current.intensity = glow.current * 9;
-    if (spillRef.current) spillRef.current.intensity = glow.current * 4;
+    for (const m of lensMats) m.emissiveIntensity = glow.current * 2.6;
+    if (lightRef.current) lightRef.current.intensity = glow.current * 6;
+    if (spillRef.current) spillRef.current.intensity = glow.current * 2.6;
 
-    // Scroll transition: slide vertically + spin.
+    // Scroll transition: slide vertically + spin, settling at the resting yaw.
     const g = groupRef.current;
     if (g) {
       const frameY = -0.5 + offsetY;
@@ -317,10 +363,10 @@ function ActiveModel({
       const e = easeOutCubic(prog.current);
       if (mode === "enter") {
         g.position.y = frameY + (1 - e) * (-transitionDir * SLIDE);
-        g.rotation.y = (1 - e) * (transitionDir * SPIN);
+        g.rotation.y = yaw + (1 - e) * (transitionDir * SPIN);
       } else {
         g.position.y = frameY + e * (transitionDir * SLIDE);
-        g.rotation.y = e * (-transitionDir * SPIN);
+        g.rotation.y = yaw + e * (-transitionDir * SPIN);
         if (prog.current >= 1 && !exitDone.current) {
           exitDone.current = true;
           onExitDone?.();
@@ -336,36 +382,38 @@ function ActiveModel({
   const startY = mode === "enter" ? frameY - transitionDir * SLIDE : frameY;
 
   return (
-    <group ref={groupRef} position={[offsetX, startY, 0]}>
+    <group ref={groupRef} position={[offsetX, startY, 0]} rotation={[0, yaw, 0]}>
       <primitive object={root} />
-      {/* Core glow from inside the fixture. */}
+      {/* Core glow from inside the diffuser. */}
       <pointLight
         ref={lightRef}
-        position={[0, 0.3, 0.4]}
+        position={lightPos}
         color={WARM}
-        distance={9}
+        distance={7}
         decay={2}
         intensity={0}
       />
       {/* Wider warm spill that washes the surrounding scene when lit. */}
       <pointLight
         ref={spillRef}
-        position={[0, 0.6, 2]}
+        position={[lightPos[0], lightPos[1] + 0.3, lightPos[2] + 1.2]}
         color={WARM}
-        distance={16}
+        distance={14}
         decay={2}
         intensity={0}
       />
       {/* Ground plane that catches the hard cast shadow (transparent so the
-          page backdrop shows through). */}
-      <mesh
-        receiveShadow
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, groundY, 0]}
-      >
-        <planeGeometry args={[40, 40]} />
-        <shadowMaterial transparent opacity={dark ? 0.5 : 0.28} />
-      </mesh>
+          page backdrop shows through). Hidden for floating / clamp fixtures. */}
+      {!noGround && (
+        <mesh
+          receiveShadow
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, groundY, 0]}
+        >
+          <planeGeometry args={[40, 40]} />
+          <shadowMaterial transparent opacity={dark ? 0.5 : 0.28} />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -407,8 +455,8 @@ function KeyLight({
       position={[x, y, z]}
       intensity={dark ? 0.5 : 2.1}
       color={dark ? "#ffe0b8" : "#ffffff"}
-      shadow-mapSize-width={2048}
-      shadow-mapSize-height={2048}
+      shadow-mapSize-width={1024}
+      shadow-mapSize-height={1024}
       shadow-radius={2}
       shadow-bias={-0.0004}
       shadow-camera-near={0.5}
@@ -452,12 +500,14 @@ function Scene({
     <>
       {/* Studio three-point lighting (no environment map). The key light casts
           a hard, defined shadow onto the ground plane. */}
-      <ambientLight intensity={dark ? 0.12 : 0.34} />
+      {/* Almost no ambient — directional studio lights do the work for a
+          high-contrast, realistic look. */}
+      <ambientLight intensity={dark ? 0 : 0.06} />
       <KeyLight az={lightAz} el={lightEl} dark={dark} />
       {/* Fill from the opposite side keeps shadows from going pure black. */}
       <directionalLight
         position={[-5, 3, 2]}
-        intensity={dark ? 0.14 : 0.55}
+        intensity={dark ? 0.18 : 0.65}
         color={dark ? "#9fb2cc" : "#dfe6f0"}
       />
       {/* Rim/back light separates the model from the backdrop. */}
@@ -474,6 +524,9 @@ function Scene({
           scale={model.scale}
           offsetY={model.offsetY}
           offsetX={model.offsetX}
+          yaw={model.yaw}
+          noGround={model.noGround}
+          matte={model.matte}
           exploded={exploded}
           bulbOn={bulbOn && !model.noBulb}
           lensNames={model.lens}
@@ -488,6 +541,9 @@ function Scene({
             scale={ex.scale}
             offsetY={ex.offsetY}
             offsetX={ex.offsetX}
+            yaw={ex.yaw}
+            noGround={ex.noGround}
+            matte={ex.matte}
             exploded={false}
             bulbOn={bulbOn && !ex.noBulb}
             lensNames={ex.lens}
@@ -700,9 +756,13 @@ export default function Viewer() {
   const fg = dark ? "#f4f4f5" : "#1a1a1a";
   const sub = dark ? "#a7a39b" : "#5c5950";
   const muted = dark ? "#54525a" : "#c3c0b6";
-  const bg = dark
-    ? "radial-gradient(120% 90% at 62% 38%, #1c1814 0%, #0c0b0d 55%, #070608 100%)"
-    : "radial-gradient(120% 90% at 50% 34%, #faf9f5 0%, #efece4 60%, #e6e3d9 100%)";
+  // Per-model background colour, cross-faded with a smooth linear transition as
+  // you scroll between models. A fixed vignette overlay adds depth on top.
+  const h = model.hue;
+  const baseBg = dark ? `hsl(${h} 26% 6.5%)` : `hsl(${h} 24% 93%)`;
+  const overlay = dark
+    ? "radial-gradient(125% 95% at 60% 36%, rgba(255,240,220,0.06), rgba(0,0,0,0.45) 72%)"
+    : "radial-gradient(125% 95% at 50% 34%, rgba(255,255,255,0.5), rgba(60,55,45,0.07) 72%)";
   const bulbDisabled = !!model.noBulb;
 
   return (
@@ -715,9 +775,10 @@ export default function Viewer() {
         height: "100dvh",
         width: "100vw",
         position: "relative",
-        background: bg,
+        backgroundColor: baseBg,
+        backgroundImage: overlay,
         color: fg,
-        transition: "background 0.6s ease, color 0.5s ease",
+        transition: "background-color 0.8s linear, color 0.5s ease",
       }}
     >
       <Canvas
@@ -841,7 +902,7 @@ const tagline: React.CSSProperties = {
 };
 const corner: React.CSSProperties = {
   position: "absolute",
-  top: "1.5rem",
+  bottom: "2rem",
   right: "1.5rem",
   display: "flex",
   flexDirection: "column",
