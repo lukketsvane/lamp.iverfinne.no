@@ -57,7 +57,7 @@ const MODELS: Model[] = [
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
     url: "/models/lamp_01_assembly.glb",
     scale: 0.85,
-    lens: ["tripo_part_3_material"],
+    lens: ["Ljomveg_Diffuser"],
   },
   // Lemljos — three frosted diffusers; matte wood.
   {
@@ -84,7 +84,8 @@ const MODELS: Model[] = [
     tagline: ["Mjukt ljos.", "Eit jamt, matt skin."],
     url: "/models/kultist.glb",
     scale: 0.86,
-    lens: ["tripo_part_4_material"],
+    yaw: -Math.PI / 2,
+    lens: ["Oval_Lens"],
   },
   // Glo — the merged dome lamp (part_0 dome).
   {
