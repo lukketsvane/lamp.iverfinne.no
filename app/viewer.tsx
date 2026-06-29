@@ -71,7 +71,6 @@ const MODELS: Model[] = [
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
     url: "/models/lamp_01_assembly.glb",
     scale: 0.85,
-    assemble: true,
     lens: ["Ljomveg_Diffuser"],
   },
   // Lemljos — three frosted diffusers; matte wood.
@@ -96,7 +95,6 @@ const MODELS: Model[] = [
 MODELS.forEach((m) => useGLTF.preload(m.url));
 
 const WARM = new THREE.Color("#ffcf8a");
-const EXPLODE_SPREAD = 0.4;
 
 // Background colour swatches revealed by holding + dragging the theme toggle.
 const THEME_COLORS: { hue: number; swatch: string }[] = [
@@ -215,8 +213,7 @@ function ActiveModel({
   const prog = useRef(0); // transition progress 0..1
   const exitDone = useRef(false);
 
-  const { root, parts, lensMats, woodMats, groundY, lightPos, maxDim } =
-    useMemo(() => {
+  const { root, parts, lensMats, woodMats, groundY, lightPos } = useMemo(() => {
     const clone = scene.clone(true);
 
     // Collapse an exploded assembly back together: zero the lateral (X/Z)
@@ -314,7 +311,14 @@ function ActiveModel({
       const dir = pc.clone().sub(modelCenter);
       if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
       dir.normalize();
-      return { obj: child, orig: child.position.clone(), dir };
+      // Hand-defined explode offset authored in Blender (glTF node extras);
+      // falls back to a gentle outward push if a part has none.
+      const ex = child.userData?.explode as number[] | undefined;
+      const explodeOff =
+        Array.isArray(ex) && ex.length === 3
+          ? new THREE.Vector3(ex[0], ex[1], ex[2])
+          : dir.clone().multiplyScalar(0.22 * Math.max(size.x, size.y, size.z));
+      return { obj: child, orig: child.position.clone(), explodeOff };
     });
 
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
@@ -339,7 +343,7 @@ function ActiveModel({
     wrap.scale.setScalar(s);
     // Bottom of the (centered) model after scaling — the ground line.
     const groundY = -(size.y * s) / 2;
-    return { root: wrap, parts, lensMats, woodMats, groundY, lightPos, maxDim };
+    return { root: wrap, parts, lensMats, woodMats, groundY, lightPos };
   }, [scene, scale, lensNames, matte, assemble]);
 
   // Re-tint the wood whenever the chosen finish changes (no model rebuild).
@@ -357,9 +361,7 @@ function ActiveModel({
     glow.current += ((bulbOn ? 1 : 0) - glow.current) * k;
 
     for (const p of parts) {
-      p.obj.position
-        .copy(p.orig)
-        .addScaledVector(p.dir, factor.current * EXPLODE_SPREAD * maxDim);
+      p.obj.position.copy(p.orig).addScaledVector(p.explodeOff, factor.current);
     }
     for (const m of lensMats) m.emissiveIntensity = glow.current * 1.25;
     if (lightRef.current) lightRef.current.intensity = glow.current * 3;
