@@ -107,6 +107,18 @@ const THEME_COLORS: { hue: number; swatch: string }[] = [
   { hue: 275, swatch: "#a78fc8" }, // lilac
 ];
 
+// Wood-finish variants ("Vel uttrykk"). Each multiplies the wood base colour;
+// the lit diffuser/lens is left untouched. HDR multipliers (>1) lighten.
+const FINISHES: {
+  name: string;
+  swatch: string;
+  mul: [number, number, number];
+}[] = [
+  { name: "Naturleg eik", swatch: "#c79a5c", mul: [1, 1, 1] },
+  { name: "Røykt eik", swatch: "#5b4327", mul: [0.46, 0.34, 0.24] },
+  { name: "Lys ask", swatch: "#e7d3a6", mul: [1.7, 1.92, 2.5] },
+];
+
 // Scroll transition: the outgoing model slides vertically off-screen while it
 // spins; the incoming one slides in from the opposite edge.
 const SLIDE = 5.5; // world units a model travels off-screen
@@ -169,6 +181,7 @@ function ActiveModel({
   exploded,
   bulbOn,
   lensNames,
+  finishMul,
   dark,
   transitionDir = 1,
   mode = "enter",
@@ -185,6 +198,7 @@ function ActiveModel({
   exploded: boolean;
   bulbOn: boolean;
   lensNames?: string[];
+  finishMul: [number, number, number];
   dark: boolean;
   /** Scroll direction that triggered this transition (+1 next, -1 prev). */
   transitionDir?: number;
@@ -201,7 +215,7 @@ function ActiveModel({
   const prog = useRef(0); // transition progress 0..1
   const exitDone = useRef(false);
 
-  const { root, parts, lensMats, groundY, lightPos } = useMemo(() => {
+  const { root, parts, lensMats, woodMats, groundY, lightPos } = useMemo(() => {
     const clone = scene.clone(true);
 
     // Collapse an exploded assembly back together: zero the lateral (X/Z)
@@ -241,6 +255,9 @@ function ActiveModel({
     // and mark the lens materials emissive.
     const lensMats: THREE.MeshStandardMaterial[] = [];
     const lensObjs: THREE.Mesh[] = [];
+    // Non-lens wood materials + their base colour, so the finish can re-tint
+    // them on demand without rebuilding the whole model.
+    const woodMats: { mat: THREE.MeshStandardMaterial; base: THREE.Color }[] = [];
     clone.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
@@ -273,6 +290,9 @@ function ActiveModel({
           if ("sheen" in phys) phys.sheen = 0;
           if ("specularIntensity" in phys) phys.specularIntensity = 0;
           c.needsUpdate = true;
+        }
+        if (c.isMeshStandardMaterial && !isLens) {
+          woodMats.push({ mat: c, base: c.color.clone() });
         }
         return c;
       });
@@ -318,8 +338,17 @@ function ActiveModel({
     wrap.scale.setScalar(s);
     // Bottom of the (centered) model after scaling — the ground line.
     const groundY = -(size.y * s) / 2;
-    return { root: wrap, parts, lensMats, groundY, lightPos };
+    return { root: wrap, parts, lensMats, woodMats, groundY, lightPos };
   }, [scene, scale, lensNames, matte, assemble]);
+
+  // Re-tint the wood whenever the chosen finish changes (no model rebuild).
+  useEffect(() => {
+    const [r, g, b] = finishMul;
+    for (const { mat, base } of woodMats) {
+      mat.color.setRGB(base.r * r, base.g * g, base.b * b);
+      mat.needsUpdate = true;
+    }
+  }, [finishMul, woodMats]);
 
   useFrame((_, dt) => {
     const k = Math.min(1, dt * 5);
@@ -463,6 +492,7 @@ function Scene({
   lightAz,
   lightEl,
   orbitEnabled,
+  finishMul,
 }: {
   index: number;
   dir: number;
@@ -474,6 +504,7 @@ function Scene({
   lightAz: number;
   lightEl: number;
   orbitEnabled: boolean;
+  finishMul: [number, number, number];
 }) {
   const model = MODELS[index];
   const cam = model.camera ?? DEFAULT_CAM;
@@ -512,6 +543,7 @@ function Scene({
           exploded={exploded}
           bulbOn={bulbOn && !model.noBulb}
           lensNames={model.lens}
+          finishMul={finishMul}
           dark={dark}
           transitionDir={dir}
           mode="enter"
@@ -530,6 +562,7 @@ function Scene({
             exploded={false}
             bulbOn={bulbOn && !ex.noBulb}
             lensNames={ex.lens}
+            finishMul={finishMul}
             dark={dark}
             transitionDir={exiting!.dir}
             mode="exit"
@@ -605,6 +638,8 @@ const Icon = {
 export default function Viewer() {
   const [index, setIndex] = useState(0);
   const [bulbOn, setBulbOn] = useState(false);
+  // Chosen wood finish ("Vel uttrykk").
+  const [finish, setFinish] = useState(0);
   // Exploded view is temporarily disabled (button greyed out).
   const exploded = false;
   // Theme: 'auto' follows the device, otherwise an explicit choice. Tap the
@@ -859,6 +894,7 @@ export default function Viewer() {
           lightAz={lightAz}
           lightEl={lightEl}
           orbitEnabled={!threeFinger}
+          finishMul={FINISHES[finish].mul}
         />
       </Canvas>
 
@@ -960,6 +996,35 @@ export default function Viewer() {
         ))}
       </div>
 
+      {/* Bottom-centre: wood-finish picker ("Vel uttrykk"). */}
+      <div style={{ ...finishRail, ...uiFade(uiIn) }}>
+        <span style={{ ...finishLabel, color: sub }}>
+          {FINISHES[finish].name}
+        </span>
+        <div style={{ display: "flex", gap: 14 }}>
+          {FINISHES.map((f, i) => (
+            <button
+              key={f.name}
+              aria-label={f.name}
+              aria-current={i === finish}
+              onClick={() => setFinish(i)}
+              title={f.name}
+              style={{
+                ...finishSwatch,
+                background: f.swatch,
+                transform: i === finish ? "scale(1.15)" : "scale(1)",
+                boxShadow:
+                  i === finish
+                    ? `0 0 0 2px ${
+                        dark ? "#fff" : "#1a1a1a"
+                      }, 0 2px 8px rgba(0,0,0,0.4)`
+                    : "0 1px 4px rgba(0,0,0,0.35)",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Slow intro: a black cover that fades away to reveal the scene. */}
       <div
         aria-hidden
@@ -983,6 +1048,31 @@ function uiFade(visible: boolean): React.CSSProperties {
 }
 
 /* ---------- styles ---------- */
+const finishRail: React.CSSProperties = {
+  position: "absolute",
+  bottom: "calc(1.7rem + env(safe-area-inset-bottom))",
+  left: "50%",
+  transform: "translateX(-50%)",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 10,
+  pointerEvents: "auto",
+};
+const finishLabel: React.CSSProperties = {
+  fontSize: 11,
+  letterSpacing: "0.16em",
+  textTransform: "uppercase",
+};
+const finishSwatch: React.CSSProperties = {
+  width: 34,
+  height: 34,
+  borderRadius: "50%",
+  border: "none",
+  padding: 0,
+  cursor: "pointer",
+  transition: "transform 0.2s ease, box-shadow 0.2s ease",
+};
 const heading: React.CSSProperties = {
   position: "absolute",
   top: "calc(3rem + env(safe-area-inset-top))",
