@@ -9,7 +9,12 @@ import {
   useState,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import {
+  Environment,
+  Lightformer,
+  OrbitControls,
+  useGLTF,
+} from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 
@@ -581,6 +586,48 @@ function Scene({
         color={dark ? "#ffcaa0" : "#ffffff"}
       />
 
+      {/* Image-based lighting: a self-contained virtual studio (soft "softbox"
+          panels — no external HDRI to fetch) gives the wood realistic soft
+          reflections and a natural ambient gradient. This is the biggest step
+          toward Apple-grade physical lighting. Baked once (frames=1); overall
+          strength scales with theme. Matte Lemljos has envMapIntensity 0, so it
+          stays flat clay and is unaffected. */}
+      <Environment
+        resolution={256}
+        frames={1}
+        environmentIntensity={dark ? 0.3 : 0.55}
+      >
+        {/* Big warm key softbox, high and in front. */}
+        <Lightformer
+          intensity={1.6}
+          position={[0, 2.5, 3]}
+          scale={[7, 4, 1]}
+          color="#fff4e6"
+        />
+        {/* Cool side fill, camera-left. */}
+        <Lightformer
+          intensity={0.8}
+          position={[-4.5, 1.5, 1]}
+          scale={[3, 5, 1]}
+          color="#cdd9ec"
+        />
+        {/* Warm rim from behind-right. */}
+        <Lightformer
+          intensity={0.8}
+          position={[4.5, 1, -1.5]}
+          scale={[3, 5, 1]}
+          color="#ffd5a8"
+        />
+        {/* Dim warm ground bounce. */}
+        <Lightformer
+          intensity={0.5}
+          position={[0, -3, 0]}
+          scale={[6, 6, 1]}
+          rotation={[Math.PI / 2, 0, 0]}
+          color="#5a5048"
+        />
+      </Environment>
+
       <Suspense fallback={null}>
         <ActiveModel
           key={model.url}
@@ -934,15 +981,15 @@ export default function Viewer() {
         ? `hsl(${tint} 22% 8.5%)`
         : `hsl(${tint} 24% 92%)`
       : dark
-      ? "#141416"
+      ? "#0e0e10"
       : "#efece4";
   const overlay =
     tint != null
       ? dark
-        ? `radial-gradient(135% 110% at 50% 42%, hsl(${tint} 18% 14%) 0%, hsl(${tint} 22% 8.5%) 46%, hsl(${tint} 28% 4.5%) 100%)`
+        ? `radial-gradient(135% 110% at 50% 42%, hsl(${tint} 18% 11%) 0%, hsl(${tint} 22% 6%) 46%, hsl(${tint} 30% 3%) 100%)`
         : `radial-gradient(135% 110% at 50% 42%, hsl(${tint} 30% 97%) 0%, hsl(${tint} 24% 92%) 52%, hsl(${tint} 18% 85%) 100%)`
       : dark
-      ? "radial-gradient(135% 110% at 50% 42%, #232327 0%, #161618 46%, #0b0b0d 100%)"
+      ? "radial-gradient(135% 110% at 50% 42%, #1a1a1d 0%, #100f12 46%, #070708 100%)"
       : "radial-gradient(135% 110% at 50% 42%, #f7f4ee 0%, #efece4 52%, #e2ddd1 100%)";
   const bulbDisabled = !!model.noBulb;
 
@@ -1050,9 +1097,9 @@ export default function Viewer() {
                       background: swatch,
                       transform: active ? "scale(1.25)" : "scale(1)",
                       boxShadow: active
-                        ? `0 0 0 2px ${dark ? "#fff" : "#111"}`
+                        ? `0 0 0 2px ${dark ? "#fff" : "#8d887d"}`
                         : chosen
-                        ? `0 0 0 2px ${dark ? "#ffffffaa" : "#000000aa"}`
+                        ? `0 0 0 2px ${dark ? "#ffffffaa" : "#8d887daa"}`
                         : "0 1px 3px rgba(0,0,0,0.3)",
                     }}
                   />
@@ -1106,8 +1153,8 @@ export default function Viewer() {
                 boxShadow:
                   i === finish
                     ? `0 0 0 2px ${
-                        dark ? "#fff" : "#1a1a1a"
-                      }, 0 2px 8px rgba(0,0,0,0.4)`
+                        dark ? "#fff" : "#8d887d"
+                      }, 0 2px 8px rgba(0,0,0,0.25)`
                     : "0 1px 4px rgba(0,0,0,0.35)",
               }}
             />
