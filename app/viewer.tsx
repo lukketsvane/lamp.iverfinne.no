@@ -111,10 +111,13 @@ const FINISHES: {
   name: string;
   swatch: string;
   mul: [number, number, number];
+  /** Non-photoreal "concept sketch" look: drop the wood texture for flat clay. */
+  sketch?: boolean;
 }[] = [
   { name: "Naturleg eik", swatch: "#c79a5c", mul: [1, 1, 1] },
   { name: "Røykt eik", swatch: "#5b4327", mul: [0.46, 0.34, 0.24] },
   { name: "Lys ask", swatch: "#e7d3a6", mul: [1.7, 1.92, 2.5] },
+  { name: "Sketch", swatch: "#ececed", mul: [1, 1, 1], sketch: true },
 ];
 
 // Scroll transition: the outgoing model slides vertically off-screen while it
@@ -179,7 +182,7 @@ function ActiveModel({
   exploded,
   bulbOn,
   lensNames,
-  finishMul,
+  finishIdx,
   dark,
   transitionDir = 1,
   mode = "enter",
@@ -196,7 +199,7 @@ function ActiveModel({
   exploded: boolean;
   bulbOn: boolean;
   lensNames?: string[];
-  finishMul: [number, number, number];
+  finishIdx: number;
   dark: boolean;
   /** Scroll direction that triggered this transition (+1 next, -1 prev). */
   transitionDir?: number;
@@ -264,7 +267,11 @@ function ActiveModel({
     const lensObjs: THREE.Mesh[] = [];
     // Non-lens wood materials + their base colour, so the finish can re-tint
     // them on demand without rebuilding the whole model.
-    const woodMats: { mat: THREE.MeshStandardMaterial; base: THREE.Color }[] = [];
+    const woodMats: {
+      mat: THREE.MeshStandardMaterial;
+      base: THREE.Color;
+      map: THREE.Texture | null;
+    }[] = [];
     clone.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
@@ -299,7 +306,7 @@ function ActiveModel({
           c.needsUpdate = true;
         }
         if (c.isMeshStandardMaterial && !isLens) {
-          woodMats.push({ mat: c, base: c.color.clone() });
+          woodMats.push({ mat: c, base: c.color.clone(), map: c.map });
         }
         return c;
       });
@@ -381,12 +388,19 @@ function ActiveModel({
 
   // Re-tint the wood whenever the chosen finish changes (no model rebuild).
   useEffect(() => {
-    const [r, g, b] = finishMul;
-    for (const { mat, base } of woodMats) {
-      mat.color.setRGB(base.r * r, base.g * g, base.b * b);
+    const f = FINISHES[finishIdx];
+    for (const { mat, base, map } of woodMats) {
+      if (f.sketch) {
+        mat.map = null; // flat clay — concept-sketch look
+        mat.color.setRGB(0.82, 0.82, 0.85);
+      } else {
+        mat.map = map; // restore the wood texture
+        const [r, g, b] = f.mul;
+        mat.color.setRGB(base.r * r, base.g * g, base.b * b);
+      }
       mat.needsUpdate = true;
     }
-  }, [finishMul, woodMats]);
+  }, [finishIdx, woodMats]);
 
   useFrame((_, dt) => {
     const k = Math.min(1, dt * 5);
@@ -530,7 +544,7 @@ function Scene({
   lightAz,
   lightEl,
   orbitEnabled,
-  finishMul,
+  finishIdx,
 }: {
   index: number;
   dir: number;
@@ -542,7 +556,7 @@ function Scene({
   lightAz: number;
   lightEl: number;
   orbitEnabled: boolean;
-  finishMul: [number, number, number];
+  finishIdx: number;
 }) {
   const model = MODELS[index];
   const cam = model.camera ?? DEFAULT_CAM;
@@ -581,7 +595,7 @@ function Scene({
           exploded={exploded}
           bulbOn={bulbOn && !model.noBulb}
           lensNames={model.lens}
-          finishMul={finishMul}
+          finishIdx={finishIdx}
           dark={dark}
           transitionDir={dir}
           mode="enter"
@@ -600,7 +614,7 @@ function Scene({
             exploded={false}
             bulbOn={bulbOn && !ex.noBulb}
             lensNames={ex.lens}
-            finishMul={finishMul}
+            finishIdx={finishIdx}
             dark={dark}
             transitionDir={exiting!.dir}
             mode="exit"
@@ -962,7 +976,7 @@ export default function Viewer() {
           lightAz={lightAz}
           lightEl={lightEl}
           orbitEnabled={!threeFinger && !shiftHeld}
-          finishMul={FINISHES[finish].mul}
+          finishIdx={finish}
         />
       </Canvas>
 
