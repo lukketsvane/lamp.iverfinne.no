@@ -213,7 +213,16 @@ function ActiveModel({
   const prog = useRef(0); // transition progress 0..1
   const exitDone = useRef(false);
 
-  const { root, parts, lensMats, woodMats, groundY, lightPos } = useMemo(() => {
+  const {
+    root,
+    parts,
+    lensMats,
+    woodMats,
+    groundY,
+    lightPos,
+    explodeFit,
+    baseScale,
+  } = useMemo(() => {
     const clone = scene.clone(true);
 
     // Collapse an exploded assembly back together: zero the lateral (X/Z)
@@ -324,6 +333,21 @@ function ActiveModel({
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     const s = (2.4 * scale) / maxDim;
 
+    // Bounds when fully exploded → a shrink-to-fit factor so the spread model
+    // keeps the same on-screen size (base stays on the ground, nothing leaves
+    // frame). Applied to the inner wrap so the ground plane stays put.
+    const expBox = new THREE.Box3();
+    const pb = new THREE.Box3();
+    for (const p of parts) {
+      pb.setFromObject(p.obj);
+      pb.translate(p.explodeOff);
+      expBox.union(pb);
+    }
+    const expSize = new THREE.Vector3();
+    expBox.getSize(expSize);
+    const explodeFit =
+      maxDim / (Math.max(expSize.x, expSize.y, expSize.z) || maxDim);
+
     // Place the interior light at the centre of the lit diffuser so the glow
     // comes from inside the shade — not a stray hotspot in the base.
     const lightLocal = new THREE.Vector3(0, size.y * 0.12, 0);
@@ -343,7 +367,16 @@ function ActiveModel({
     wrap.scale.setScalar(s);
     // Bottom of the (centered) model after scaling — the ground line.
     const groundY = -(size.y * s) / 2;
-    return { root: wrap, parts, lensMats, woodMats, groundY, lightPos };
+    return {
+      root: wrap,
+      parts,
+      lensMats,
+      woodMats,
+      groundY,
+      lightPos,
+      explodeFit,
+      baseScale: s,
+    };
   }, [scene, scale, lensNames, matte, assemble]);
 
   // Re-tint the wood whenever the chosen finish changes (no model rebuild).
@@ -363,6 +396,8 @@ function ActiveModel({
     for (const p of parts) {
       p.obj.position.copy(p.orig).addScaledVector(p.explodeOff, factor.current);
     }
+    // Shrink-to-fit while exploded so the model stays framed + on the ground.
+    root.scale.setScalar(baseScale * (1 + (explodeFit - 1) * factor.current));
     for (const m of lensMats) m.emissiveIntensity = glow.current * 1.25;
     if (lightRef.current) lightRef.current.intensity = glow.current * 3;
     if (spillRef.current) spillRef.current.intensity = glow.current * 1.4;
@@ -690,6 +725,36 @@ export default function Viewer() {
   const [lightAz, setLightAz] = useState(0.84);
   const [lightEl, setLightEl] = useState(0.95);
   const [threeFinger, setThreeFinger] = useState(false);
+  // Desktop: holding Shift steers the key light (and suspends orbit) so a
+  // shift-drag rotates the light instead of the camera.
+  const [shiftHeld, setShiftHeld] = useState(false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => e.key === "Shift" && setShiftHeld(true);
+    const up = (e: KeyboardEvent) => e.key === "Shift" && setShiftHeld(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+  const onLightDrag = (e: React.PointerEvent) => {
+    if (!e.shiftKey || e.pointerType === "touch") return;
+    e.preventDefault();
+    const start = { x: e.clientX, y: e.clientY, az: lightAz, el: lightEl };
+    const move = (ev: PointerEvent) => {
+      setLightAz(start.az - (ev.clientX - start.x) * 0.006);
+      setLightEl(
+        Math.max(0.15, Math.min(1.45, start.el - (ev.clientY - start.y) * 0.006))
+      );
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   // Move to a specific model, kicking off the slide/spin transition. Wraps
   // around at both ends so scrolling past the last returns to the first.
@@ -861,6 +926,7 @@ export default function Viewer() {
   return (
     <main
       onWheel={onWheel}
+      onPointerDown={onLightDrag}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -895,7 +961,7 @@ export default function Viewer() {
           dark={dark}
           lightAz={lightAz}
           lightEl={lightEl}
-          orbitEnabled={!threeFinger}
+          orbitEnabled={!threeFinger && !shiftHeld}
           finishMul={FINISHES[finish].mul}
         />
       </Canvas>
