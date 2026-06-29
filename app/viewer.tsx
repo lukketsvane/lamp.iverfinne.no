@@ -9,13 +9,7 @@ import {
   useState,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import {
-  OrbitControls,
-  useGLTF,
-  ContactShadows,
-  Environment,
-  Lightformer,
-} from "@react-three/drei";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 
@@ -27,6 +21,10 @@ type Model = {
   tagline: [string, string];
   url: string;
   scale?: number;
+  /** Extra vertical nudge (world units) for per-model framing. */
+  offsetY?: number;
+  /** Extra horizontal nudge (world units) for per-model framing. */
+  offsetX?: number;
   camera?: [number, number, number];
   /** Explicit lens material-name substrings (overrides auto-detection). */
   lens?: string[];
@@ -46,51 +44,115 @@ const MODELS: Model[] = [
   // Mysa (was lamp_04): part_0 = wooden shade disc, part_1 = column; part_2 is
   // the diffuser sitting under the shade — the light source.
   {
-    name: "Mysa",
-    title: "Mysa",
-    tagline: ["Warm cast.", "Wood, lit from within."],
+    name: "Ljomveg",
+    title: "Ljomveg",
+    tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
     url: "/models/mysa.glb",
+    scale: 0.82,
+    offsetY: 0.42,
     lens: ["tripo_part_2_material"],
   },
-  // Aure (was lamp_03): lens found geometrically.
+  // Aure (was lamp_03): three frosted diffusers — the left & right side
+  // panels (part_4, part_5) and the top discs (part_2, part_9). All glow.
   {
-    name: "Aure",
-    title: "Aure",
-    tagline: ["Ambient mode.", "Soft light for evening rooms."],
+    name: "Lemljos",
+    title: "Lemljos",
+    tagline: ["Dempa modus.", "Mjukt ljos for kveldsrom."],
     url: "/models/aure.glb",
-    scale: 0.8,
+    scale: 0.82,
+    lens: [
+      "tripo_part_2_material",
+      "tripo_part_4_material",
+      "tripo_part_5_material",
+      "tripo_part_9_material",
+    ],
   },
-  // Lume (was lamp_02): the oval frosted face is the lens (part_4).
+  // Kultist (was lamp_02): the oval frosted face is the lens (part_4).
   {
-    name: "Lume",
-    title: "Lume",
-    tagline: ["Soft light.", "An even, frosted glow."],
-    url: "/models/lume.glb",
+    name: "Kultist",
+    title: "Kultist",
+    tagline: ["Mjukt ljos.", "Eit jamt, matt skin."],
+    url: "/models/kultist.glb",
+    scale: 0.86,
     lens: ["tripo_part_4_material"],
-  },
-  // part_5 is the thin front panel that sits mid-body — the lit diffuser.
-  {
-    name: "Lamp 01",
-    title: "Glo",
-    tagline: ["Quiet warmth.", "A glow that settles in."],
-    url: "/models/lamp_01.glb",
-    lens: ["tripo_part_5_material"],
   },
   {
     name: "Clamp Lamp",
     title: "Pivot",
-    tagline: ["Task light.", "Aimed where you need it."],
+    tagline: ["Arbeidslys.", "Retta dit du treng det."],
     url: "/models/clamp_lamp_01.glb",
+    scale: 0.86,
   },
-  // Hidden for now:
-  // micro:bit — not a lamp.
-  // Desk Lamp — a whole desk scene, no single fixture.
+  // Flower-shaped clamp lamp; part_7 is the round diffuser disc.
+  {
+    name: "Clamp Lamp 02",
+    title: "Blome",
+    tagline: ["Klypelys.", "Ein blome som lyser."],
+    url: "/models/clamp_lamp_02.glb",
+    scale: 0.86,
+    lens: ["tripo_part_7_material"],
+  },
+  // Stand lamp: no frosted diffuser of its own — part_3 (the shade body) is
+  // made emissive and lit from an interior light.
+  {
+    name: "Stand Lamp",
+    title: "Søyle",
+    tagline: ["Ståande ljos.", "Roleg i eit hjørne."],
+    url: "/models/stand_lamp_01.glb",
+    scale: 0.86,
+    lens: ["tripo_part_3_material"],
+  },
+  // Lantern: part_5 is the diffuser at the top of the inner column.
+  {
+    name: "Lamp 5",
+    title: "Lykt",
+    tagline: ["Bera ljoset.", "Ei lykt for natta."],
+    url: "/models/lamp_5.glb",
+    scale: 0.86,
+    lens: ["tripo_part_5_material"],
+  },
+  // Glo (was lamp_01): part_5 is the thin front panel mid-body — the diffuser.
+  // Placed just before micro:bit per request.
+  {
+    name: "Lamp 01",
+    title: "Glo",
+    tagline: ["Roleg varme.", "Eit skin som legg seg."],
+    url: "/models/lamp_01.glb",
+    scale: 0.9,
+    lens: ["tripo_part_5_material"],
+  },
+  // Real micro:bit is tiny; it's not a lamp, so no bulb.
+  {
+    name: "micro:bit",
+    title: "micro:bit",
+    tagline: ["Lita maskin.", "Ikkje ei lampe i det heile."],
+    url: "/models/microbit_2.glb",
+    scale: 0.3,
+    noBulb: true,
+  },
+  // Desk scene; reads best from an elevated 3/4 angle.
+  {
+    name: "Desk Lamp",
+    title: "Atelier",
+    tagline: ["Arbeidsmodus.", "Eit heilt skrivebord."],
+    url: "/models/desk_lamp_scene.glb",
+    scale: 0.82,
+    camera: [1.5, 3.2, 6],
+    noBulb: true,
+  },
 ];
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
 
 const WARM = new THREE.Color("#ffcf8a");
 const EXPLODE_SPREAD = 1.6;
+
+// Scroll transition: the outgoing model slides vertically off-screen while it
+// spins; the incoming one slides in from the opposite edge.
+const SLIDE = 5.5; // world units a model travels off-screen
+const SPIN = 0.7; // radians of Y-rotation across a transition
+const TRANS_SPEED = 3.2; // easing speed (~0.3s)
+const easeOutCubic = (p: number) => 1 - Math.pow(1 - p, 3);
 
 /**
  * Find the lens/diffuser meshes geometrically: a thin, front-facing panel
@@ -133,23 +195,38 @@ function detectLensMeshes(
 function ActiveModel({
   url,
   scale = 1,
+  offsetY = 0,
+  offsetX = 0,
   exploded,
   bulbOn,
   lensNames,
   dark,
+  transitionDir = 1,
+  mode = "enter",
+  onExitDone,
 }: {
   url: string;
   scale?: number;
+  offsetY?: number;
+  offsetX?: number;
   exploded: boolean;
   bulbOn: boolean;
   lensNames?: string[];
   dark: boolean;
+  /** Scroll direction that triggered this transition (+1 next, -1 prev). */
+  transitionDir?: number;
+  /** "enter" = slide in to rest; "exit" = slide out of view. */
+  mode?: "enter" | "exit";
+  onExitDone?: () => void;
 }) {
   const { scene } = useGLTF(url);
+  const groupRef = useRef<THREE.Group>(null);
   const lightRef = useRef<THREE.PointLight>(null);
   const spillRef = useRef<THREE.PointLight>(null);
   const factor = useRef(0);
-  const glow = useRef(0);
+  const glow = useRef(bulbOn ? 1 : 0);
+  const prog = useRef(0); // transition progress 0..1
+  const exitDone = useRef(false);
 
   const { root, parts, lensMats, groundY } = useMemo(() => {
     const clone = scene.clone(true);
@@ -182,15 +259,11 @@ function ActiveModel({
         const c = m.clone() as THREE.MeshStandardMaterial;
         const isLens =
           lensMeshes.has(mesh) || matchName(c.name) || matchName(mesh.name);
-        if (c.isMeshStandardMaterial) {
-          // Subtle environment pickup makes the wood/metal read as real.
-          c.envMapIntensity = 0.8;
-          if (isLens) {
-            c.emissive = WARM.clone();
-            c.emissiveIntensity = 0;
-            c.toneMapped = false; // let the lit panel bloom past white
-            lensMats.push(c);
-          }
+        if (c.isMeshStandardMaterial && isLens) {
+          c.emissive = WARM.clone();
+          c.emissiveIntensity = 0;
+          c.toneMapped = false; // let the lit panel bloom past white
+          lensMats.push(c);
         }
         return c;
       });
@@ -235,10 +308,35 @@ function ActiveModel({
     for (const m of lensMats) m.emissiveIntensity = glow.current * 3.2;
     if (lightRef.current) lightRef.current.intensity = glow.current * 9;
     if (spillRef.current) spillRef.current.intensity = glow.current * 4;
+
+    // Scroll transition: slide vertically + spin.
+    const g = groupRef.current;
+    if (g) {
+      const frameY = -0.5 + offsetY;
+      prog.current = Math.min(1, prog.current + dt * TRANS_SPEED);
+      const e = easeOutCubic(prog.current);
+      if (mode === "enter") {
+        g.position.y = frameY + (1 - e) * (-transitionDir * SLIDE);
+        g.rotation.y = (1 - e) * (transitionDir * SPIN);
+      } else {
+        g.position.y = frameY + e * (transitionDir * SLIDE);
+        g.rotation.y = e * (-transitionDir * SPIN);
+        if (prog.current >= 1 && !exitDone.current) {
+          exitDone.current = true;
+          onExitDone?.();
+        }
+      }
+    }
   });
 
+  // Drop the whole assembly (model + ground) a little below centre so it clears
+  // the heading text and reads as standing on a surface. The initial Y is the
+  // off-screen start for the enter animation.
+  const frameY = -0.5 + offsetY;
+  const startY = mode === "enter" ? frameY - transitionDir * SLIDE : frameY;
+
   return (
-    <group>
+    <group ref={groupRef} position={[offsetX, startY, 0]}>
       <primitive object={root} />
       {/* Core glow from inside the fixture. */}
       <pointLight
@@ -258,14 +356,16 @@ function ActiveModel({
         decay={2}
         intensity={0}
       />
-      <ContactShadows
+      {/* Ground plane that catches the hard cast shadow (transparent so the
+          page backdrop shows through). */}
+      <mesh
+        receiveShadow
+        rotation={[-Math.PI / 2, 0, 0]}
         position={[0, groundY, 0]}
-        opacity={dark ? 0.55 : 0.32}
-        color={dark ? "#000000" : "#3a3328"}
-        scale={11}
-        blur={3}
-        far={4.5}
-      />
+      >
+        <planeGeometry args={[40, 40]} />
+        <shadowMaterial transparent opacity={dark ? 0.5 : 0.28} />
+      </mesh>
     </group>
   );
 }
@@ -287,68 +387,123 @@ function CameraRig({ pos }: { pos: [number, number, number] }) {
   return null;
 }
 
+/** Key light whose direction is steerable (three-finger drag). */
+function KeyLight({
+  az,
+  el,
+  dark,
+}: {
+  az: number;
+  el: number;
+  dark: boolean;
+}) {
+  const R = 10;
+  const x = R * Math.cos(el) * Math.sin(az);
+  const y = R * Math.sin(el);
+  const z = R * Math.cos(el) * Math.cos(az);
+  return (
+    <directionalLight
+      castShadow
+      position={[x, y, z]}
+      intensity={dark ? 0.5 : 2.1}
+      color={dark ? "#ffe0b8" : "#ffffff"}
+      shadow-mapSize-width={2048}
+      shadow-mapSize-height={2048}
+      shadow-radius={2}
+      shadow-bias={-0.0004}
+      shadow-camera-near={0.5}
+      shadow-camera-far={30}
+      shadow-camera-left={-5}
+      shadow-camera-right={5}
+      shadow-camera-top={5}
+      shadow-camera-bottom={-5}
+    />
+  );
+}
+
 function Scene({
   index,
+  dir,
+  exiting,
+  onExitDone,
   exploded,
   bulbOn,
   dark,
+  lightAz,
+  lightEl,
+  orbitEnabled,
 }: {
   index: number;
+  dir: number;
+  exiting: { index: number; dir: number; id: number } | null;
+  onExitDone: () => void;
   exploded: boolean;
   bulbOn: boolean;
   dark: boolean;
+  lightAz: number;
+  lightEl: number;
+  orbitEnabled: boolean;
 }) {
   const model = MODELS[index];
   const cam = model.camera ?? DEFAULT_CAM;
   const polar = polarOf(cam);
+  const ex = exiting ? MODELS[exiting.index] : null;
   return (
     <>
-      <ambientLight intensity={dark ? 0.14 : 0.42} />
-      {/* In-scene image-based lighting (no HDR download) for soft, real
-          reflections on the wood and metal. */}
-      <Environment resolution={256} frames={1}>
-        <Lightformer
-          intensity={dark ? 0.7 : 1.7}
-          position={[0, 2.5, 3]}
-          scale={[9, 9, 1]}
-          color={dark ? "#352a1f" : "#fff6ea"}
-        />
-        <Lightformer
-          intensity={dark ? 0.3 : 0.8}
-          position={[-4, 1, -2]}
-          scale={[6, 6, 1]}
-          color={dark ? "#1b2230" : "#d4dae4"}
-        />
-        <Lightformer
-          intensity={dark ? 0.25 : 0.6}
-          position={[4, 0, -3]}
-          scale={[6, 6, 1]}
-          color={dark ? "#2a2018" : "#ffe7c2"}
-        />
-      </Environment>
+      {/* Studio three-point lighting (no environment map). The key light casts
+          a hard, defined shadow onto the ground plane. */}
+      <ambientLight intensity={dark ? 0.12 : 0.34} />
+      <KeyLight az={lightAz} el={lightEl} dark={dark} />
+      {/* Fill from the opposite side keeps shadows from going pure black. */}
       <directionalLight
-        position={[4, 7, 5]}
-        intensity={dark ? 0.35 : 1.7}
-        color={dark ? "#ffd9a8" : "#ffffff"}
+        position={[-5, 3, 2]}
+        intensity={dark ? 0.14 : 0.55}
+        color={dark ? "#9fb2cc" : "#dfe6f0"}
       />
-      <directionalLight position={[-6, 3, -4]} intensity={dark ? 0.12 : 0.5} />
+      {/* Rim/back light separates the model from the backdrop. */}
+      <directionalLight
+        position={[-1, 4, -6]}
+        intensity={dark ? 0.3 : 0.7}
+        color={dark ? "#ffcaa0" : "#ffffff"}
+      />
 
       <Suspense fallback={null}>
         <ActiveModel
           key={model.url}
           url={model.url}
           scale={model.scale}
+          offsetY={model.offsetY}
+          offsetX={model.offsetX}
           exploded={exploded}
           bulbOn={bulbOn && !model.noBulb}
           lensNames={model.lens}
           dark={dark}
+          transitionDir={dir}
+          mode="enter"
         />
+        {ex && (
+          <ActiveModel
+            key={`exit-${exiting!.id}`}
+            url={ex.url}
+            scale={ex.scale}
+            offsetY={ex.offsetY}
+            offsetX={ex.offsetX}
+            exploded={false}
+            bulbOn={bulbOn && !ex.noBulb}
+            lensNames={ex.lens}
+            dark={dark}
+            transitionDir={exiting!.dir}
+            mode="exit"
+            onExitDone={onExitDone}
+          />
+        )}
       </Suspense>
 
       <OrbitControls
         makeDefault
         enableZoom={false}
         enablePan={false}
+        enableRotate={orbitEnabled}
         enableDamping
         rotateSpeed={0.85}
         target={[0, 0, 0]}
@@ -416,9 +571,40 @@ export default function Viewer() {
   const [dark, setDark] = useState(false);
   const wheelLock = useRef(false);
 
-  const go = useCallback((dir: number) => {
-    setIndex((i) => Math.min(MODELS.length - 1, Math.max(0, i + dir)));
+  // Scroll transition state.
+  const [dir, setDir] = useState(1);
+  const [exiting, setExiting] = useState<
+    { index: number; dir: number; id: number } | null
+  >(null);
+  const idxRef = useRef(0);
+  const exitId = useRef(0);
+  const onExitDone = useCallback(() => setExiting(null), []);
+
+  // Steerable key light (three-finger drag) + whether orbit is allowed.
+  const [lightAz, setLightAz] = useState(0.84);
+  const [lightEl, setLightEl] = useState(0.95);
+  const [threeFinger, setThreeFinger] = useState(false);
+
+  // Move to a specific model, kicking off the slide/spin transition. Wraps
+  // around at both ends so scrolling past the last returns to the first.
+  const jumpTo = useCallback((target: number, d: number) => {
+    const i = idxRef.current;
+    if (target === i) return;
+    idxRef.current = target;
+    setDir(d);
+    exitId.current += 1;
+    setExiting({ index: i, dir: d, id: exitId.current });
+    setIndex(target);
   }, []);
+
+  const go = useCallback(
+    (d: number) => {
+      const i = idxRef.current;
+      const next = (i + d + MODELS.length) % MODELS.length;
+      jumpTo(next, d);
+    },
+    [jumpTo]
+  );
 
   // Follow the system/device theme dynamically; the manual toggle overrides
   // until the device preference changes again.
@@ -448,13 +634,54 @@ export default function Viewer() {
     window.setTimeout(() => (wheelLock.current = false), 650);
   };
 
-  // Vertical swipe navigates on touch (horizontal drag is left for orbit).
+  // Touch: 1 finger orbits, vertical 1-finger swipe navigates; 3 fingers steer
+  // the directional light and block both navigation and camera rotation.
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const lightStart = useRef<{
+    x: number;
+    y: number;
+    az: number;
+    el: number;
+  } | null>(null);
+  const avg = (touches: React.TouchList) => {
+    let x = 0;
+    let y = 0;
+    for (let i = 0; i < touches.length; i++) {
+      x += touches[i].clientX;
+      y += touches[i].clientY;
+    }
+    return { x: x / touches.length, y: y / touches.length };
+  };
   const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length >= 3) {
+      setThreeFinger(true);
+      touchStart.current = null;
+      const c = avg(e.touches);
+      lightStart.current = { x: c.x, y: c.y, az: lightAz, el: lightEl };
+      return;
+    }
     const t = e.touches[0];
     touchStart.current = { x: t.clientX, y: t.clientY };
   };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (threeFinger && lightStart.current && e.touches.length >= 3) {
+      const c = avg(e.touches);
+      const dx = c.x - lightStart.current.x;
+      const dy = c.y - lightStart.current.y;
+      setLightAz(lightStart.current.az - dx * 0.006);
+      setLightEl(
+        Math.max(0.15, Math.min(1.45, lightStart.current.el - dy * 0.006))
+      );
+    }
+  };
   const onTouchEnd = (e: React.TouchEvent) => {
+    if (threeFinger) {
+      if (e.touches.length < 3) {
+        setThreeFinger(false);
+        lightStart.current = null;
+      }
+      return;
+    }
     const s = touchStart.current;
     touchStart.current = null;
     if (!s) return;
@@ -482,6 +709,7 @@ export default function Viewer() {
     <main
       onWheel={onWheel}
       onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       style={{
         height: "100dvh",
@@ -502,7 +730,18 @@ export default function Viewer() {
           gl.toneMappingExposure = 1.05;
         }}
       >
-        <Scene index={index} exploded={exploded} bulbOn={bulbOn} dark={dark} />
+        <Scene
+          index={index}
+          dir={dir}
+          exiting={exiting}
+          onExitDone={onExitDone}
+          exploded={exploded}
+          bulbOn={bulbOn}
+          dark={dark}
+          lightAz={lightAz}
+          lightEl={lightEl}
+          orbitEnabled={!threeFinger}
+        />
       </Canvas>
 
       {/* Top-left: serif model name + tagline */}
@@ -563,7 +802,7 @@ export default function Viewer() {
             key={m.url}
             aria-label={m.title}
             aria-current={i === index}
-            onClick={() => setIndex(i)}
+            onClick={() => jumpTo(i, i > index ? 1 : -1)}
             style={{
               ...dot,
               width: i === index ? 9 : 7,
