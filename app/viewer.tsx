@@ -116,8 +116,13 @@ const THEME_COLORS: { hue: number; swatch: string }[] = [
 // spins; the incoming one slides in from the opposite edge.
 const SLIDE = 5.5; // world units a model travels off-screen
 const SPIN = 0.7; // radians of Y-rotation across a transition
-const TRANS_SPEED = 3.2; // easing speed (~0.3s)
+const TRANS_SPEED = 3.0; // easing speed (~0.33s)
 const easeOutCubic = (p: number) => 1 - Math.pow(1 - p, 3);
+// Gentle iOS-style spring with a small settle overshoot, for the slide-in.
+const easeOutBack = (p: number, s = 0.9) => {
+  const q = p - 1;
+  return q * q * ((s + 1) * q + s) + 1;
+};
 
 /**
  * Find the lens/diffuser meshes geometrically: a thin, front-facing panel
@@ -321,7 +326,9 @@ function ActiveModel({
       prog.current = Math.min(1, prog.current + dt * TRANS_SPEED);
       const e = easeOutCubic(prog.current);
       if (mode === "enter") {
-        g.position.y = frameY + (1 - e) * (-transitionDir * SLIDE);
+        // Spring the slide so it settles with a subtle iOS-style overshoot.
+        const eb = easeOutBack(prog.current);
+        g.position.y = frameY + (1 - eb) * (-transitionDir * SLIDE);
         g.rotation.y = yaw + (1 - e) * (transitionDir * SPIN);
       } else {
         g.position.y = frameY + e * (transitionDir * SLIDE);
@@ -599,6 +606,13 @@ export default function Viewer() {
   const wheelLock = useRef(false);
 
   useEffect(() => {
+    // Respect reduced-motion: skip the slow cinematic intro.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setIntro(false);
+      setUiIn(true);
+      setBulbOn(true);
+      return;
+    }
     const t1 = window.setTimeout(() => setIntro(false), 250); // begin reveal
     const t2 = window.setTimeout(() => setBulbOn(true), 3200); // light on
     const t3 = window.setTimeout(() => setUiIn(true), 4200); // UI fades in
