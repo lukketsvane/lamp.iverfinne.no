@@ -163,6 +163,15 @@ MODELS.forEach((m) => useGLTF.preload(m.url));
 const WARM = new THREE.Color("#ffcf8a");
 const EXPLODE_SPREAD = 1.6;
 
+// Background colour swatches revealed by holding + dragging the theme toggle.
+const THEME_COLORS: { hue: number; swatch: string }[] = [
+  { hue: 35, swatch: "#d9a35f" }, // amber
+  { hue: 350, swatch: "#d98a9a" }, // rose
+  { hue: 145, swatch: "#7faf8c" }, // sage
+  { hue: 205, swatch: "#7fa6c8" }, // sky
+  { hue: 275, swatch: "#a78fc8" }, // lilac
+];
+
 // Scroll transition: the outgoing model slides vertically off-screen while it
 // spins; the incoming one slides in from the opposite edge.
 const SLIDE = 5.5; // world units a model travels off-screen
@@ -631,6 +640,9 @@ export default function Viewer() {
   const dark = themeMode === "auto" ? systemDark : themeMode === "dark";
   const [themeMenu, setThemeMenu] = useState(false);
   const [hoverOpt, setHoverOpt] = useState<string | null>(null);
+  // Chosen background colour (hue) from the hold-drag swatch menu; null follows
+  // the per-model hue.
+  const [tint, setTint] = useState<number | null>(null);
   const wheelLock = useRef(false);
 
   // Scroll transition state.
@@ -700,7 +712,7 @@ export default function Viewer() {
       window.removeEventListener("pointerup", up);
       if (opened) {
         const pick = optAt(ev.clientX, ev.clientY);
-        if (pick) setThemeMode(pick as "auto" | "light" | "dark");
+        if (pick !== null) setTint(Number(pick));
         setThemeMenu(false);
         setHoverOpt(null);
       } else {
@@ -795,9 +807,9 @@ export default function Viewer() {
   const fg = dark ? "#f4f4f5" : "#1a1a1a";
   const sub = dark ? "#a7a39b" : "#5c5950";
   const muted = dark ? "#54525a" : "#c3c0b6";
-  // Per-model background colour, cross-faded with a smooth linear transition as
-  // you scroll between models. A fixed vignette overlay adds depth on top.
-  const h = model.hue;
+  // Background colour: a chosen swatch (tint) overrides the per-model hue.
+  // Cross-faded with a smooth linear transition. A fixed vignette adds depth.
+  const h = tint ?? model.hue;
   const baseBg = dark ? `hsl(${h} 26% 6.5%)` : `hsl(${h} 24% 93%)`;
   const overlay = dark
     ? "radial-gradient(125% 95% at 60% 36%, rgba(255,240,220,0.06), rgba(0,0,0,0.45) 72%)"
@@ -887,35 +899,30 @@ export default function Viewer() {
           <Icon.Layers on={false} />
         </button>
         <div style={{ position: "relative", display: "flex" }}>
-          {/* Hold-and-drag menu opens to the left of the toggle. */}
+          {/* Hold-and-drag colour menu opens to the left of the toggle. */}
           {themeMenu && (
-            <div style={{ ...themeMenuRow, color: fg }}>
-              {(
-                [
-                  ["auto", "Auto"],
-                  ["light", "Lys"],
-                  ["dark", "Mørk"],
-                ] as const
-              ).map(([k, label]) => (
-                <span
-                  key={k}
-                  data-theme-opt={k}
-                  style={{
-                    ...themeOpt,
-                    background:
-                      hoverOpt === k
-                        ? fg
-                        : themeMode === k
-                        ? dark
-                          ? "rgba(255,255,255,0.14)"
-                          : "rgba(0,0,0,0.08)"
-                        : "transparent",
-                    color: hoverOpt === k ? (dark ? "#111" : "#fff") : fg,
-                  }}
-                >
-                  {label}
-                </span>
-              ))}
+            <div style={themeMenuRow}>
+              {THEME_COLORS.map(({ hue, swatch }) => {
+                const k = String(hue);
+                const active = hoverOpt === k;
+                const chosen = tint === hue;
+                return (
+                  <span
+                    key={k}
+                    data-theme-opt={k}
+                    style={{
+                      ...themeSwatch,
+                      background: swatch,
+                      transform: active ? "scale(1.25)" : "scale(1)",
+                      boxShadow: active
+                        ? `0 0 0 2px ${dark ? "#fff" : "#111"}`
+                        : chosen
+                        ? `0 0 0 2px ${dark ? "#ffffffaa" : "#000000aa"}`
+                        : "0 1px 3px rgba(0,0,0,0.3)",
+                    }}
+                  />
+                );
+              })}
             </div>
           )}
           <button
@@ -995,12 +1002,12 @@ const themeMenuRow: React.CSSProperties = {
   WebkitBackdropFilter: "blur(8px)",
   whiteSpace: "nowrap",
 };
-const themeOpt: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 500,
-  padding: "5px 11px",
-  borderRadius: 999,
-  transition: "background 0.15s ease, color 0.15s ease",
+const themeSwatch: React.CSSProperties = {
+  width: 22,
+  height: 22,
+  borderRadius: "50%",
+  display: "inline-block",
+  transition: "transform 0.12s ease, box-shadow 0.12s ease",
 };
 const iconBtn: React.CSSProperties = {
   background: "none",
