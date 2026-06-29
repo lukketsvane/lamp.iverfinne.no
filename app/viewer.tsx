@@ -99,19 +99,21 @@ function ActiveModel({
   exploded,
   bulbOn,
   lensNames,
+  dark,
 }: {
   url: string;
   scale?: number;
   exploded: boolean;
   bulbOn: boolean;
   lensNames?: string[];
+  dark: boolean;
 }) {
   const { scene } = useGLTF(url);
   const lightRef = useRef<THREE.PointLight>(null);
   const factor = useRef(0);
   const glow = useRef(0);
 
-  const { root, parts, lensMats } = useMemo(() => {
+  const { root, parts, lensMats, groundY } = useMemo(() => {
     const clone = scene.clone(true);
     clone.updateMatrixWorld(true);
 
@@ -166,10 +168,13 @@ function ActiveModel({
     });
 
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const s = (2.4 * scale) / maxDim;
     const wrap = new THREE.Group();
     wrap.add(clone);
-    wrap.scale.setScalar((2.4 * scale) / maxDim);
-    return { root: wrap, parts, lensMats };
+    wrap.scale.setScalar(s);
+    // Bottom of the (centered) model after scaling — the ground line.
+    const groundY = -(size.y * s) / 2;
+    return { root: wrap, parts, lensMats, groundY };
   }, [scene, scale, lensNames]);
 
   useFrame((_, dt) => {
@@ -196,6 +201,13 @@ function ActiveModel({
         distance={9}
         decay={2}
         intensity={0}
+      />
+      <ContactShadows
+        position={[0, groundY, 0]}
+        opacity={dark ? 0.12 : 0.35}
+        scale={10}
+        blur={2.6}
+        far={4}
       />
     </group>
   );
@@ -250,16 +262,10 @@ function Scene({
           exploded={exploded}
           bulbOn={bulbOn && !model.noBulb}
           lensNames={model.lens}
+          dark={dark}
         />
       </Suspense>
 
-      <ContactShadows
-        position={[0, -1.35, 0]}
-        opacity={dark ? 0.12 : 0.35}
-        scale={10}
-        blur={2.6}
-        far={4}
-      />
       <OrbitControls
         makeDefault
         enableZoom={false}
