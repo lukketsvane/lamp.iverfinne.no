@@ -924,17 +924,26 @@ export default function Viewer() {
   const fg = dark ? "#f4f4f5" : "#1a1a1a";
   const sub = dark ? "#a7a39b" : "#5c5950";
   const muted = dark ? "#54525a" : "#c3c0b6";
-  // Background: flat black (or neutral light) by default; a chosen swatch
-  // (tint) from the hold-drag menu can override it. No per-model brown tint.
+  // Background: a soft studio "softbox" vignette — never a flat black void — so
+  // the scene reads as premium as Apple's interactive 3D. The gradient lifts
+  // behind the lamp and falls off at the edges; a chosen swatch (tint) from the
+  // hold-drag menu shifts the whole gradient's hue.
   const baseBg =
     tint != null
       ? dark
-        ? `hsl(${tint} 26% 6.5%)`
-        : `hsl(${tint} 24% 93%)`
+        ? `hsl(${tint} 22% 8.5%)`
+        : `hsl(${tint} 24% 92%)`
       : dark
-      ? "#000000"
+      ? "#141416"
       : "#efece4";
-  const overlay = "none";
+  const overlay =
+    tint != null
+      ? dark
+        ? `radial-gradient(135% 110% at 50% 42%, hsl(${tint} 18% 14%) 0%, hsl(${tint} 22% 8.5%) 46%, hsl(${tint} 28% 4.5%) 100%)`
+        : `radial-gradient(135% 110% at 50% 42%, hsl(${tint} 30% 97%) 0%, hsl(${tint} 24% 92%) 52%, hsl(${tint} 18% 85%) 100%)`
+      : dark
+      ? "radial-gradient(135% 110% at 50% 42%, #232327 0%, #161618 46%, #0b0b0d 100%)"
+      : "radial-gradient(135% 110% at 50% 42%, #f7f4ee 0%, #efece4 52%, #e2ddd1 100%)";
   const bulbDisabled = !!model.noBulb;
 
   return (
