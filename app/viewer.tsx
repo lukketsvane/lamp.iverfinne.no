@@ -59,7 +59,8 @@ const MODELS: Model[] = [
     tagline: ["Mjukt ljos.", "Eit jamt, matt skin."],
     url: "/models/kultist.glb",
     scale: 0.86,
-    lens: ["tripo_part_4_material"],
+    yaw: -Math.PI / 2,
+    lens: ["Oval_Lens"],
   },
   // Ljomveg — the assembly variant, collapsed back onto its axis so the
   // exploded parts sit concentrically and read as one whole lamp.
