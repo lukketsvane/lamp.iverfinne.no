@@ -1021,7 +1021,7 @@ export default function Viewer() {
           {model.blurb ?? `${model.tagline[0]} ${model.tagline[1]}`}
         </p>
         <button
-          onClick={() => setBulbOn((v) => !bulbDisabled && !v)}
+          onClick={() => (model.specs ? setDetails(true) : setBulbOn((v) => !v))}
           style={{ ...exploreLink, color: fg, borderColor: accent }}
         >
           Utforsk {model.title} <Icon.Arrow />
