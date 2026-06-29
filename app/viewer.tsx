@@ -32,10 +32,10 @@ function polarOf([x, y, z]: [number, number, number]) {
 }
 
 const MODELS: Model[] = [
-  { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
   // The oval frosted face is the lens (confirmed via part segmentation).
   { name: "Lamp 02", url: "/models/lamp_02.glb", lens: ["tripo_part_4_material"] },
   { name: "Lamp 03", url: "/models/lamp_03.glb", scale: 0.8 },
+  { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
   // Real micro:bit is only ~45x55 mm; it's not a lamp, so no bulb.
   { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32, noBulb: true },
   // Desk scene last; reads best from an elevated 3/4 top-down angle.
