@@ -61,16 +61,17 @@ const MODELS: Model[] = [
     scale: 0.86,
     lens: ["tripo_part_4_material"],
   },
-  // Ljomveg — whole dome lamp (the assembly GLB ships exploded with no
-  // assembled reference, so we use the merged mesh of the same lamp).
+  // Ljomveg — the assembly variant, collapsed back onto its axis so the
+  // exploded parts sit concentrically and read as one whole lamp.
   {
     name: "Ljomveg",
     title: "Ljomveg",
     hue: 32,
     tagline: ["Varmt skin.", "Tre, opplyst innanfrå."],
-    url: "/models/lamp_01.glb",
-    scale: 0.9,
-    lens: ["tripo_part_0_material"], // the frosted dome
+    url: "/models/lamp_01_assembly.glb",
+    scale: 0.85,
+    assemble: true,
+    lens: ["tripo_part_3_material"],
   },
   // Lemljos — three frosted diffusers; matte wood.
   {
@@ -202,16 +203,23 @@ function ActiveModel({
   const { root, parts, lensMats, groundY, lightPos } = useMemo(() => {
     const clone = scene.clone(true);
 
-    // Collapse an exploded assembly onto its central (Y) axis so the parts sit
-    // concentrically and form the whole lamp again.
+    // Collapse an exploded assembly back together: zero the lateral (X/Z)
+    // explosion so parts are concentric on the central axis, and pull them
+    // toward their vertical centroid to close the exploded gaps.
     if (assemble) {
+      const meshes: THREE.Mesh[] = [];
       clone.traverse((o) => {
         const m = o as THREE.Mesh;
-        if (m.isMesh) {
-          m.position.x = 0;
-          m.position.z = 0;
-        }
+        if (m.isMesh) meshes.push(m);
       });
+      const cy =
+        meshes.reduce((a, m) => a + m.position.y, 0) / (meshes.length || 1);
+      const Y_COMPACT = 0.5; // 0 = fully stacked at centroid, 1 = unchanged
+      for (const m of meshes) {
+        m.position.x = 0;
+        m.position.z = 0;
+        m.position.y = cy + (m.position.y - cy) * Y_COMPACT;
+      }
     }
     clone.updateMatrixWorld(true);
 
