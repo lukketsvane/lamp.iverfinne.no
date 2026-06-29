@@ -25,6 +25,12 @@ type Model = {
 
 const DEFAULT_CAM: [number, number, number] = [0, 0, 6];
 
+/** Polar angle of a camera position, used to lock orbit to horizontal only. */
+function polarOf([x, y, z]: [number, number, number]) {
+  const r = Math.hypot(x, y, z) || 1;
+  return Math.acos(Math.max(-1, Math.min(1, y / r)));
+}
+
 const MODELS: Model[] = [
   { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
   // The oval frosted face is the lens (confirmed via part segmentation).
@@ -222,6 +228,8 @@ function Scene({
   dark: boolean;
 }) {
   const model = MODELS[index];
+  const cam = model.camera ?? DEFAULT_CAM;
+  const polar = polarOf(cam);
   return (
     <>
       <ambientLight intensity={dark ? 0.12 : 0.7} />
@@ -257,8 +265,10 @@ function Scene({
         enableDamping
         rotateSpeed={0.85}
         target={[0, 0, 0]}
+        minPolarAngle={polar}
+        maxPolarAngle={polar}
       />
-      <CameraRig pos={model.camera ?? DEFAULT_CAM} />
+      <CameraRig pos={cam} />
     </>
   );
 }
@@ -360,6 +370,27 @@ export default function Viewer() {
     window.setTimeout(() => (wheelLock.current = false), 650);
   };
 
+  // Vertical swipe navigates on touch (horizontal drag is left for orbit).
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = touchStart.current;
+    touchStart.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (Math.abs(dy) > 45 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+      if (wheelLock.current) return;
+      wheelLock.current = true;
+      go(dy < 0 ? 1 : -1);
+      window.setTimeout(() => (wheelLock.current = false), 500);
+    }
+  };
+
   const fg = dark ? "#f4f4f5" : "#1a1a1a";
   const muted = dark ? "#6b6b70" : "#b9b6ac";
   const bg = dark ? "#0a0a0b" : "#f0efe9";
@@ -369,6 +400,8 @@ export default function Viewer() {
   return (
     <main
       onWheel={onWheel}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       style={{
         height: "100dvh",
         width: "100vw",
