@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, ContactShadows } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 
 type Model = {
@@ -40,16 +41,10 @@ const MODELS: Model[] = [
   // diffuser sitting under the shade — the light source.
   { name: "Lamp 04", url: "/models/lamp_04.glb", lens: ["tripo_part_2_material"] },
   { name: "Clamp Lamp", url: "/models/clamp_lamp_01.glb" },
-  // Real micro:bit is only ~45x55 mm; it's not a lamp, so no bulb.
-  { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32, noBulb: true },
-  // Desk scene last; reads best from an elevated 3/4 top-down angle.
-  {
-    name: "Desk Lamp",
-    url: "/models/desk_lamp_scene.glb",
-    scale: 0.9,
-    camera: [1.5, 3.2, 6],
-    noBulb: true, // a whole desk scene — no single light fixture
-  },
+  // Hidden for now:
+  // { name: "micro:bit", url: "/models/microbit_2.glb", scale: 0.32, noBulb: true },
+  // { name: "Desk Lamp", url: "/models/desk_lamp_scene.glb", scale: 0.9,
+  //   camera: [1.5, 3.2, 6], noBulb: true },
 ];
 
 MODELS.forEach((m) => useGLTF.preload(m.url));
@@ -147,6 +142,7 @@ function ActiveModel({
         if (c.isMeshStandardMaterial && isLens) {
           c.emissive = WARM.clone();
           c.emissiveIntensity = 0;
+          c.toneMapped = false; // let emissive exceed 1.0 so bloom catches it
           lensMats.push(c);
         }
         return c;
@@ -279,6 +275,17 @@ function Scene({
         maxPolarAngle={polar}
       />
       <CameraRig pos={cam} />
+
+      {/* Glow atmosphere: the emissive lens blooms when the bulb is on. */}
+      <EffectComposer>
+        <Bloom
+          mipmapBlur
+          intensity={dark ? 1.6 : 0.9}
+          luminanceThreshold={1.0}
+          luminanceSmoothing={0.2}
+          radius={0.7}
+        />
+      </EffectComposer>
     </>
   );
 }
