@@ -214,7 +214,7 @@ function ActiveModel({
       });
       const cy =
         meshes.reduce((a, m) => a + m.position.y, 0) / (meshes.length || 1);
-      const Y_COMPACT = 0.5; // 0 = fully stacked at centroid, 1 = unchanged
+      const Y_COMPACT = 1; // keep true heights — the explosion was lateral
       for (const m of meshes) {
         m.position.x = 0;
         m.position.z = 0;
@@ -330,9 +330,9 @@ function ActiveModel({
         .copy(p.orig)
         .addScaledVector(p.dir, factor.current * EXPLODE_SPREAD);
     }
-    for (const m of lensMats) m.emissiveIntensity = glow.current * 1.9;
-    if (lightRef.current) lightRef.current.intensity = glow.current * 4.2;
-    if (spillRef.current) spillRef.current.intensity = glow.current * 1.8;
+    for (const m of lensMats) m.emissiveIntensity = glow.current * 1.25;
+    if (lightRef.current) lightRef.current.intensity = glow.current * 3;
+    if (spillRef.current) spillRef.current.intensity = glow.current * 1.4;
 
     // Scroll transition: slide vertically + spin, settling at the resting yaw.
     const g = groupRef.current;
